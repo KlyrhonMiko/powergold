@@ -39,6 +39,7 @@ export default function BorrowPage() {
   const [employeePin, setEmployeePin] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [locationName, setLocationName] = useState('');
+  const [dueDate, setDueDate] = useState('');
   const [collaborators, setCollaborators] = useState('');
   const [notes, setNotes] = useState('');
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -142,6 +143,7 @@ export default function BorrowPage() {
     setNotes('');
     setCustomerName('');
     setLocationName('');
+    setDueDate('');
     setCollaborators('');
     setEmployeeId('');
     setEmployeePin('');
@@ -305,12 +307,14 @@ export default function BorrowPage() {
   };
 
   const handleSubmit = async () => {
+    const requiresDueDate = cart.length > 0 && cart.every((item) => item.is_trackable);
     const validationError = validateBorrowSubmission({
       cart,
       employeeId,
       employeePin,
       customerName,
       locationName,
+      dueDate,
     });
     if (validationError) {
       toast.error(validationError);
@@ -338,6 +342,7 @@ export default function BorrowPage() {
           .join(' | '),
         customer_name: customerName.trim(),
         location_name: locationName.trim(),
+        return_at: requiresDueDate ? new Date(dueDate).toISOString() : undefined,
       });
 
       let displayName = employeeId.trim();
@@ -418,6 +423,8 @@ export default function BorrowPage() {
           onCustomerNameChange={setCustomerName}
           locationName={locationName}
           onLocationNameChange={setLocationName}
+          dueDate={dueDate}
+          onDueDateChange={setDueDate}
           collaborators={collaborators}
           onCollaboratorsChange={setCollaborators}
           notes={notes}

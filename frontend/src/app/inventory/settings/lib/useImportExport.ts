@@ -94,8 +94,7 @@ export interface BorrowHistoryExportFormValues extends ReportExportFilterContrac
 
 export interface MovementExportFormValues extends ReportExportFilterContract {
   format: string;
-  movement_type?: string;
-  item_id?: string;
+  item_id: string;
 }
 
 export function isRolling7DayTimelineMode(timelineMode?: ReportTimelineSelection): boolean {
@@ -123,12 +122,10 @@ export function composeBorrowHistoryExportParams(params: BorrowHistoryExportForm
 
   return {
     format: params.format,
-    report_version: params.report_version,
     status: normalizeSelectAll(params.status),
     ...(timelineMode ? { timeline_mode: timelineMode } : {}),
     ...(isRolling7DayTimelineMode(timelineMode) ? { anchor_date: params.anchor_date } : {}),
     borrower_id: normalizeOptionalText(params.borrower_id),
-    include_receipt_rendered: params.include_receipt_rendered,
     include_deleted: params.include_deleted,
     include_archived: params.include_archived,
   };
@@ -139,9 +136,7 @@ export function composeMovementExportParams(params: MovementExportFormValues): E
 
   return {
     format: params.format,
-    report_version: params.report_version,
-    movement_type: normalizeSelectAll(params.movement_type),
-    item_id: normalizeOptionalText(params.item_id),
+    item_id: params.item_id.trim(),
     ...(timelineMode ? { timeline_mode: timelineMode } : {}),
     ...(isRolling7DayTimelineMode(timelineMode) ? { anchor_date: params.anchor_date } : {}),
     serial_number: normalizeOptionalText(params.serial_number),

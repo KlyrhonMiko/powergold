@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2, Undo2, AlertCircle, ChevronDown, Check } from 'lucide-react';
-import { borrowApi, BorrowRequest, BorrowRequestUnit, BorrowUnitReturn } from './api';
+import { borrowApi, BorrowBatchReturn, BorrowRequest, BorrowRequestBatch, BorrowRequestUnit, BorrowUnitReturn } from './api';
 import { inventoryApi, ConfigRead } from '../items/api';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -22,12 +22,22 @@ interface UnitReturnState {
   notes: string;
 }
 
+interface BatchReturnState {
+  borrow_batch_id: string;
+  batch_id: string;
+  item_id?: string;
+  item_name?: string;
+  qty_assigned: number;
+  qty_returned: number;
+}
+
 export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [assignedUnits, setAssignedUnits] = useState<BorrowRequestUnit[]>([]);
   const [conditions, setConditions] = useState<ConfigRead[]>([]);
   const [unitReturns, setUnitReturns] = useState<UnitReturnState[]>([]);
+  const [batchReturns, setBatchReturns] = useState<BatchReturnState[]>([]);
   const [globalNotes, setGlobalNotes] = useState('');
   const [globalCondition, setGlobalCondition] = useState('');
   const [globalConditionOpen, setGlobalConditionOpen] = useState(false);
@@ -51,12 +61,14 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [unitsRes, conditionsRes] = await Promise.all([
+        const [unitsRes, batchesRes, conditionsRes] = await Promise.all([
           borrowApi.getAssignedUnits(request.request_id),
+          borrowApi.getAssignedBatches(request.request_id),
           inventoryApi.getConfigs('inventory_units_condition'),
         ]);
 
         const units = (unitsRes.data as BorrowRequestUnit[]).filter(u => !u.returned_at);
+        const batches = (batchesRes.data as BorrowRequestBatch[]).filter(batch => !batch.returned_at);
         setAssignedUnits(units);
         setConditions(conditionsRes.data as ConfigRead[]);
 
@@ -66,9 +78,17 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
           condition_on_return: '',
           notes: '',
         })));
+        setBatchReturns(batches.map(batch => ({
+          borrow_batch_id: batch.borrow_batch_id,
+          batch_id: batch.batch_id,
+          item_id: batch.item_id,
+          item_name: batch.item_name,
+          qty_assigned: batch.qty_assigned,
+          qty_returned: batch.qty_not_returned ?? batch.qty_assigned,
+        })));
       } catch (err) {
         logger.error('Failed to load return modal data', { error: err, requestId: request.request_id });
-        toast.error('Failed to load assigned units');
+        toast.error('Failed to load return details');
       } finally {
         setLoading(false);
       }
@@ -79,6 +99,14 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
   const updateUnitReturn = (unitId: string, field: 'condition_on_return' | 'notes', value: string) => {
     setUnitReturns(prev => prev.map(u =>
       u.unit_id === unitId ? { ...u, [field]: value } : u
+    ));
+  };
+
+  const updateBatchReturn = (borrowBatchId: string, value: number) => {
+    setBatchReturns(prev => prev.map(batch =>
+      batch.borrow_batch_id === borrowBatchId
+        ? { ...batch, qty_returned: Math.max(0, Math.min(batch.qty_assigned, value)) }
+        : batch
     ));
   };
 
@@ -97,11 +125,16 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
         condition_on_return: u.condition_on_return || undefined,
         notes: u.notes || undefined,
       }));
+      const batch_returns: BorrowBatchReturn[] = batchReturns.map(batch => ({
+        borrow_batch_id: batch.borrow_batch_id,
+        qty_returned: batch.qty_returned,
+      }));
 
       const hasUnitData = unit_returns.some(u => u.condition_on_return || u.notes);
       await borrowApi.return(request.request_id, {
         notes: globalNotes || undefined,
         unit_returns: hasUnitData ? unit_returns : undefined,
+        batch_returns: batch_returns.length > 0 ? batch_returns : undefined,
       });
 
       toast.success('Items returned successfully');
@@ -287,8 +320,87 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
               {!hasTrackableItems && (
                 <div className="p-4 bg-muted/20 rounded-2xl border border-dashed border-border/50 text-center">
                   <p className="text-sm text-muted-foreground font-medium">
-                    This request contains non-trackable items. Stock will be restored automatically upon return.
+                    This request contains non-trackable items. Set how many units came back from each released batch. Any remaining quantity will be treated as not returned when this request is completed.
                   </p>
+                </div>
+              )}
+
+              {batchReturns.length > 0 && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground uppercase tracking-wider">Batch Return Quantities</h3>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">
+                      Enter the quantity returned for each released untrackable batch.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    {batchReturns.map((batchReturn) => {
+                      const qtyNotReturned = Math.max(batchReturn.qty_assigned - batchReturn.qty_returned, 0);
+
+                      return (
+                        <div
+                          key={batchReturn.borrow_batch_id}
+                          className="p-4 rounded-2xl border border-border bg-background/50 space-y-3"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-bold font-mono text-foreground">{batchReturn.batch_id}</span>
+                                {batchReturn.item_id && (
+                                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider">
+                                    {batchReturn.item_id}
+                                  </span>
+                                )}
+                              </div>
+                              {batchReturn.item_name && (
+                                <p className="text-xs text-muted-foreground font-medium mt-1">{batchReturn.item_name}</p>
+                              )}
+                            </div>
+                            <div className="text-right text-xs font-medium text-muted-foreground">
+                              <p>Assigned: <span className="text-foreground font-bold">{batchReturn.qty_assigned}</span></p>
+                              <p>Not returned: <span className="text-foreground font-bold">{qtyNotReturned}</span></p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider shrink-0">
+                              Returned Qty
+                            </label>
+                            <input
+                              type="number"
+                              min={0}
+                              max={batchReturn.qty_assigned}
+                              value={batchReturn.qty_returned}
+                              onChange={(e) => updateBatchReturn(batchReturn.borrow_batch_id, Number(e.target.value) || 0)}
+                              className="h-10 w-28 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-sm font-bold"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateBatchReturn(batchReturn.borrow_batch_id, batchReturn.qty_assigned)}
+                              className="h-10 px-3 rounded-xl border border-border text-xs font-bold hover:bg-muted/50 transition-colors uppercase tracking-wider"
+                            >
+                              Full
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateBatchReturn(batchReturn.borrow_batch_id, 0)}
+                              className="h-10 px-3 rounded-xl border border-border text-xs font-bold hover:bg-muted/50 transition-colors uppercase tracking-wider"
+                            >
+                              Zero
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!hasTrackableItems && batchReturns.length === 0 && (
+                <div className="p-4 bg-primary/10 rounded-2xl border border-primary/20 flex items-center gap-3 text-primary text-sm font-bold">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <p>No released batch assignments found for this request.</p>
                 </div>
               )}
 

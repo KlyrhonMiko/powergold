@@ -20,6 +20,7 @@ from systems.inventory.models.inventory_unit import InventoryUnit
 from systems.inventory.schemas.borrow_request_schemas import (
     BorrowRequestCreate,
     BorrowRequestBatchAssignment,
+    BorrowRequestBatchReturn,
     BorrowRequestUnitReturn,
 )
 from systems.inventory.services.borrow_request_service import BorrowService
@@ -541,6 +542,166 @@ def test_non_trackable_return_restores_batch_available_quantity(
     assert [movement.qty_change for movement in movements] == [-4, 4]
 
 
+def test_non_trackable_return_can_restore_partial_batch_quantity(
+    session: Session,
+    services: tuple[InventoryService, BorrowService],
+):
+    inventory_service, borrow_service = services
+    actor = _create_user()
+    session.add(actor)
+    session.flush()
+
+    request, item, batch, assignment = _build_released_non_trackable_request(
+        session,
+        inventory_service,
+        actor,
+    )
+
+    borrow_service.return_request(
+        session,
+        request.request_id,
+        actor.id,
+        batch_returns=[
+            BorrowRequestBatchReturn(
+                borrow_batch_id=assignment.borrow_batch_id,
+                qty_returned=1,
+            )
+        ],
+    )
+    session.flush()
+
+    session.refresh(batch)
+    session.refresh(assignment)
+    session.refresh(request)
+    session.refresh(item)
+
+    serialized_assignments = borrow_service.serialize_assigned_batches(session, request)
+    balances = inventory_service.get_item_balances(session, item)
+    movements = list(
+        session.exec(
+            select(InventoryMovement)
+            .where(
+                InventoryMovement.reference_id == request.request_id,
+                InventoryMovement.batch_uuid == batch.id,
+            )
+            .order_by(InventoryMovement.occurred_at.asc())
+        ).all()
+    )
+
+    assert request.status == "returned"
+    assert assignment.returned_at is not None
+    assert batch.available_qty == 7
+    assert item.available_qty == 7
+    assert balances["available_qty"] == 7
+    assert [movement.movement_type for movement in movements] == [
+        "borrow_release",
+        "borrow_return",
+    ]
+    assert [movement.qty_change for movement in movements] == [-4, 1]
+    assert serialized_assignments[0].qty_returned == 1
+    assert serialized_assignments[0].qty_not_returned == 3
+
+
+def test_non_trackable_partial_return_requires_all_batch_assignments_when_payload_present(
+    session: Session,
+    services: tuple[InventoryService, BorrowService],
+):
+    inventory_service, borrow_service = services
+    actor = _create_user()
+    session.add(actor)
+    session.flush()
+
+    item = _create_non_trackable_item(session)
+    first_batch = InventoryBatch(
+        batch_id=f"BATCH-{uuid4().hex[:8]}",
+        inventory_uuid=item.id,
+        total_qty=5,
+        available_qty=5,
+        status="healthy",
+    )
+    second_batch = InventoryBatch(
+        batch_id=f"BATCH-{uuid4().hex[:8]}",
+        inventory_uuid=item.id,
+        total_qty=5,
+        available_qty=5,
+        status="healthy",
+    )
+    session.add(first_batch)
+    session.add(second_batch)
+    session.flush()
+    inventory_service._sync_item_quantities(session, item.item_id)
+    session.flush()
+
+    request = BorrowRequest(
+        request_id=f"REQ-{uuid4().hex[:8]}",
+        borrower_uuid=actor.id,
+        transaction_ref=f"TXN-{uuid4().hex[:8]}",
+        status="released",
+        approved_by=actor.id,
+        released_by=actor.id,
+        received_by=actor.id,
+        approval_channel="standard",
+        request_channel="inventory_manager",
+    )
+    session.add(request)
+    session.flush()
+    session.add(BorrowRequestItem(borrow_uuid=request.id, item_uuid=item.id, qty_requested=4))
+    first_assignment = BorrowRequestBatch(
+        borrow_batch_id=f"BRB-{uuid4().hex[:8]}",
+        borrow_uuid=request.id,
+        batch_uuid=first_batch.id,
+        qty_assigned=2,
+        assigned_by=actor.id,
+        released_at=request.created_at,
+    )
+    second_assignment = BorrowRequestBatch(
+        borrow_batch_id=f"BRB-{uuid4().hex[:8]}",
+        borrow_uuid=request.id,
+        batch_uuid=second_batch.id,
+        qty_assigned=2,
+        assigned_by=actor.id,
+        released_at=request.created_at,
+    )
+    session.add(first_assignment)
+    session.add(second_assignment)
+    session.flush()
+
+    inventory_service.adjust_stock(
+        session,
+        item.item_id,
+        -2,
+        movement_type="borrow_release",
+        reference_id=request.request_id,
+        reference_type="borrow_request",
+        actor_id=actor.id,
+        batch_id=first_batch.batch_id,
+    )
+    inventory_service.adjust_stock(
+        session,
+        item.item_id,
+        -2,
+        movement_type="borrow_release",
+        reference_id=request.request_id,
+        reference_type="borrow_request",
+        actor_id=actor.id,
+        batch_id=second_batch.batch_id,
+    )
+    session.flush()
+
+    with pytest.raises(ValueError, match="must include all released batch assignments"):
+        borrow_service.return_request(
+            session,
+            request.request_id,
+            actor.id,
+            batch_returns=[
+                BorrowRequestBatchReturn(
+                    borrow_batch_id=first_assignment.borrow_batch_id,
+                    qty_returned=1,
+                )
+            ],
+        )
+
+
 def test_reverse_movement_rejects_second_reversal(
     session: Session,
     services: tuple[InventoryService, BorrowService],
@@ -751,6 +912,51 @@ def test_release_receipt_scopes_serial_numbers_per_trackable_item(
 
     assert receipt_map[items[0].item_id] == [units[0].serial_number]
     assert receipt_map[items[1].item_id] == [units[1].serial_number]
+
+
+def test_release_receipt_includes_partial_untrackable_return_summary(
+    session: Session,
+    services: tuple[InventoryService, BorrowService],
+):
+    inventory_service, borrow_service = services
+    actor = _create_user()
+    session.add(actor)
+    session.flush()
+
+    request, item, _, assignment = _build_released_non_trackable_request(
+        session,
+        inventory_service,
+        actor,
+    )
+
+    borrow_service.return_request(
+        session,
+        request.request_id,
+        actor.id,
+        batch_returns=[
+            BorrowRequestBatchReturn(
+                borrow_batch_id=assignment.borrow_batch_id,
+                qty_returned=2,
+            )
+        ],
+    )
+    session.flush()
+
+    receipt = borrow_service.generate_release_receipt(session, request.request_id)
+    item_line = next(line for line in receipt.items if line.item_id == item.item_id)
+
+    assert receipt.status == "returned"
+    assert item_line.qty_released == 4
+    assert item_line.qty_returned == 2
+    assert item_line.qty_not_returned == 2
+    assert item_line.batch_details == [
+        {
+            "batch_id": assignment.batch_id,
+            "qty_released": 4,
+            "qty_returned": 2,
+            "qty_not_returned": 2,
+        }
+    ]
 
 
 def test_serialize_borrow_request_includes_assigned_units_and_batches(

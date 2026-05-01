@@ -40,6 +40,8 @@ function fmtShort(dateStr?: string) {
 function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | null): string {
   const total = receipt.items.reduce((s, i) => s + i.qty_released, 0);
   const today = fmtShort(new Date().toISOString());
+  const hasReturnSummary = receipt.items.some((item) => (item.qty_returned ?? 0) > 0 || (item.qty_not_returned ?? item.qty_released) > 0 || (item.batch_details?.length ?? 0) > 0);
+  const showDueDate = receipt.items.length > 0 && receipt.items.every((item) => item.is_trackable !== false);
 
   const s = {
     wrap: 'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #000; width: 80mm; margin: 0; font-size: 11px; line-height: 1.4;',
@@ -67,6 +69,25 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
       <td style="${s.td} text-align: right; ${s.bold} width: 30px;">${item.qty_released}</td>
     </tr>`).join('');
 
+  const returnSummary = receipt.items.map((item) => {
+    const batchLines = (item.batch_details ?? []).map((batch) => `
+      <div style="padding-left: 8px; font-size: 9px; color: #555; display: flex; justify-content: space-between; gap: 8px;">
+        <span>${batch.batch_id}</span>
+        <span>Rel: ${batch.qty_released} | Ret: ${batch.qty_returned} | Not Ret: ${batch.qty_not_returned}</span>
+      </div>
+    `).join('');
+
+    return `
+      <div style="padding: 4px 0; border-bottom: 1px dotted #999;">
+        <div style="display: flex; justify-content: space-between; gap: 8px;">
+          <span style="${s.bold}">${item.name}</span>
+          <span style="font-size: 10px;">Ret: ${item.qty_returned ?? 0} | Not Ret: ${item.qty_not_returned ?? item.qty_released}</span>
+        </div>
+        ${batchLines}
+      </div>
+    `;
+  }).join('');
+
   return `<div class="receipt-print-wrapper" style="${s.wrap}">
 
     <!-- Header -->
@@ -84,9 +105,12 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
     <!-- Transaction -->
     ${row('TXN Ref', receipt.transaction_ref)}
     ${row('Request', receipt.request_id)}
+    ${row('Status', receipt.status.replace(/_/g, ' '))}
     ${row('Released', fmtDate(receipt.released_at) || '—')}
     ${row('By', receipt.released_by_name || '—')}
-    ${receipt.expected_return_at ? row('Due', fmtShort(receipt.expected_return_at), ' font-weight:800;') : ''}
+    ${showDueDate && receipt.expected_return_at ? row('Due', fmtShort(receipt.expected_return_at), ' font-weight:800;') : ''}
+    ${receipt.returned_at ? row('Returned', fmtDate(receipt.returned_at)) : ''}
+    ${receipt.returned_by_name ? row('Received By', receipt.returned_by_name) : ''}
 
     <hr style="${s.hr}">
 
@@ -116,6 +140,11 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
         </tr>
       </tfoot>
     </table>
+
+    ${hasReturnSummary ? `
+    <hr style="${s.hr}">
+    <div style="font-size: 10px; ${s.bold} color: #555; margin-bottom: 2px; letter-spacing: 1px;">RETURN STATUS</div>
+    <div style="font-size: 10px; line-height: 1.4;">${returnSummary}</div>` : ''}
 
     ${receipt.notes ? `
     <hr style="${s.hr}">

@@ -55,8 +55,9 @@ export function ImportExportSettings() {
   const mutation = useImportInventory();
   const { exportData } = useExportData();
   const { downloadTemplate } = useDownloadTemplate();
-  const { data: itemsResponse } = useInventoryItems({ per_page: 500 });
+  const { data: itemsResponse } = useInventoryItems({ per_page: 500, is_trackable: true });
   const items = itemsResponse?.data || [];
+  const equipmentItems = items.filter((item) => item.is_trackable !== false);
 
   const [users, setUsers] = useState<SystemUser[]>([]);
 
@@ -86,22 +87,18 @@ export function ImportExportSettings() {
 
   // Ledger Export State
   const [borrowParams, setBorrowParams] = useState({
-    report_version: 'v2' as 'v1' | 'v2',
     timeline_mode: '' as '' | 'daily' | 'rolling_7_day' | 'monthly' | 'yearly',
     anchor_date: undefined as Date | undefined,
     status: 'all',
     format: 'xlsx',
     borrower_id: '',
-    include_receipt_rendered: false,
     include_deleted: false,
     include_archived: false,
   });
 
   const [movementParams, setMovementParams] = useState({
-    report_version: 'v2' as 'v1' | 'v2',
     timeline_mode: '' as '' | 'daily' | 'rolling_7_day' | 'monthly' | 'yearly',
     anchor_date: undefined as Date | undefined,
-    movement_type: 'all',
     item_id: '',
     serial_number: '',
     format: 'xlsx',
@@ -336,16 +333,6 @@ export function ImportExportSettings() {
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1 mb-4">Borrow Request History</p>
               <div className="space-y-4 flex-1 mb-4">
                 <FormSelect
-                  label="Report Type"
-                  value={borrowParams.report_version}
-                  onChange={(v) => setBorrowParams({ ...borrowParams, report_version: v as typeof borrowParams.report_version })}
-                  options={[
-                    { label: 'Summary Report', key: 'v2' },
-                    { label: 'Legacy Export', key: 'v1' },
-                  ]}
-                  placeholder="Select report type"
-                />
-                <FormSelect
                   label="Timeline Mode"
                   value={borrowParams.timeline_mode}
                   onChange={(v) => setBorrowParams({ ...borrowParams, timeline_mode: v as typeof borrowParams.timeline_mode, anchor_date: v === 'rolling_7_day' ? borrowParams.anchor_date : undefined })}
@@ -369,23 +356,13 @@ export function ImportExportSettings() {
                   options={[
                     { label: 'All Borrowers', key: '' },
                     ...users.map((u) => ({
-                      label: `${u.first_name} ${u.last_name} (${u.user_id})`,
+                    label: `${u.first_name} ${u.last_name} (${u.user_id})`,
                       key: u.user_id,
                     })),
                   ]}
                   placeholder="Search borrowers..."
                 />
                 <div className="flex flex-wrap gap-6 items-center pt-2 pb-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="b-include-receipt"
-                      checked={borrowParams.include_receipt_rendered}
-                      onCheckedChange={(checked) => setBorrowParams({ ...borrowParams, include_receipt_rendered: checked === true })}
-                    />
-                    <label htmlFor="b-include-receipt" className="text-sm font-bold text-muted-foreground cursor-pointer select-none">
-                      Include Receipt
-                    </label>
-                  </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox
                       id="b-include-deleted"
@@ -445,16 +422,6 @@ export function ImportExportSettings() {
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest px-1 mb-4">Equipment History</p>
               <div className="space-y-4 flex-1 mb-4">
                 <FormSelect
-                  label="Report Type"
-                  value={movementParams.report_version}
-                  onChange={(v) => setMovementParams({ ...movementParams, report_version: v as typeof movementParams.report_version })}
-                  options={[
-                    { label: 'Summary Report', key: 'v2' },
-                    { label: 'Legacy Export', key: 'v1' },
-                  ]}
-                  placeholder="Select report type"
-                />
-                <FormSelect
                   label="Timeline Mode"
                   value={movementParams.timeline_mode}
                   onChange={(v) => setMovementParams({ ...movementParams, timeline_mode: v as typeof movementParams.timeline_mode, anchor_date: v === 'rolling_7_day' ? movementParams.anchor_date : undefined })}
@@ -473,17 +440,15 @@ export function ImportExportSettings() {
                 )}
                 <div className="grid grid-cols-2 gap-4">
                   <FormSelect
-                    label="Specific Item (Optional)"
+                    label="Specific Equipment"
+                    required
                     value={movementParams.item_id}
                     onChange={(v) => setMovementParams({ ...movementParams, item_id: v, serial_number: '' })}
-                    options={[
-                      { label: 'All Items', key: '' },
-                      ...items.map((item) => ({
-                        label: `${item.name} (${item.item_id})`,
-                        key: item.item_id,
-                      })),
-                    ]}
-                    placeholder="Search items..."
+                    options={equipmentItems.map((item) => ({
+                      label: `${item.name} (${item.item_id})`,
+                      key: item.item_id,
+                    }))}
+                    placeholder="Select equipment..."
                   />
                   <FormSelect
                     label="Serial Number"
@@ -516,18 +481,7 @@ export function ImportExportSettings() {
                     </label>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormSelect
-                    label="Movement Type"
-                    value={movementParams.movement_type}
-                    onChange={(v) => setMovementParams({ ...movementParams, movement_type: v })}
-                    options={[
-                      { label: 'All Movements', key: 'all' },
-                      { label: 'In Only', key: 'in' },
-                      { label: 'Out Only', key: 'out' },
-                    ]}
-                    placeholder="Select type"
-                  />
+                <div className="grid grid-cols-1 gap-4">
                   <FormSelect
                     label="Format"
                     value={movementParams.format}
@@ -542,7 +496,7 @@ export function ImportExportSettings() {
               </div>
               <button
                 onClick={() => exportData('movements', composeMovementExportParams(movementParams))}
-                disabled={equipmentHistoryNeedsAnchorDate && !movementParams.anchor_date}
+                disabled={(equipmentHistoryNeedsAnchorDate && !movementParams.anchor_date) || !movementParams.item_id}
                 className="w-full h-10 rounded-lg transition-colors border mt-auto bg-yellow-400 text-yellow-950 border-yellow-300 font-bold text-xs hover:bg-yellow-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Export Equipment History

@@ -20,8 +20,9 @@ vi.mock('@/app/inventory/items/lib/useItemQueries', () => ({
   useInventoryItems: () => ({
     data: {
       data: [
-        { item_id: 'ITEM-001', name: 'Tracked Camera' },
-        { item_id: 'ITEM-002', name: 'Handheld Scanner' },
+        { item_id: 'ITEM-001', name: 'Tracked Camera', is_trackable: true },
+        { item_id: 'ITEM-002', name: 'Handheld Scanner', is_trackable: true },
+        { item_id: 'ITEM-003', name: 'Cleaning Solvent', is_trackable: false },
       ],
     },
   }),
@@ -108,26 +109,9 @@ describe('ImportExportSettings', () => {
 
     const call = mockExportData.mock.calls[0];
     const exportParams = call[1] as Record<string, unknown>;
-    expect(exportParams.report_version).toBe('v2');
     expect(exportParams.timeline_mode).toBeUndefined();
     expect(exportParams.anchor_date).toBeUndefined();
     expect(exportParams.serial_number).toBeUndefined();
-  });
-
-  it('allows borrower history legacy export mode', () => {
-    render(<ImportExportSettings />);
-
-    const borrowCard = screen.getByText('Borrow Request History').closest('div');
-    expect(borrowCard).toBeTruthy();
-
-    const borrowerSection = borrowCard as HTMLElement;
-
-    fireEvent.click(within(borrowerSection).getByRole('button', { name: 'Summary Report' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Legacy Export' }));
-    fireEvent.click(within(borrowerSection).getByRole('button', { name: 'Export Borrow Request History' }));
-
-    const exportParams = mockExportData.mock.calls[0][1] as Record<string, unknown>;
-    expect(exportParams.report_version).toBe('v1');
   });
 
   it('keeps equipment serial selection disabled until an item is chosen', () => {
@@ -141,7 +125,8 @@ describe('ImportExportSettings', () => {
     const serialField = within(section).getByRole('button', { name: 'Select an item first' });
     expect(serialField).toBeDisabled();
 
-    fireEvent.click(within(section).getByRole('button', { name: 'All Items' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'Select equipment...' }));
+    expect(screen.queryByRole('button', { name: /Cleaning Solvent/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
 
     const enabledSerialField = within(section).getByRole('button', { name: 'All Serials' });
@@ -161,19 +146,28 @@ describe('ImportExportSettings', () => {
     expect(screen.getByRole('button', { name: /SN-101/ })).toBeInTheDocument();
   });
 
-  it('exports equipment history as a v2 summary report by default', () => {
+  it('exports equipment history only when equipment item is selected', () => {
     render(<ImportExportSettings />);
 
     const movementCard = screen.getByText('Equipment History').closest('div');
     expect(movementCard).toBeTruthy();
 
     const section = movementCard as HTMLElement;
-    expect(within(section).getByRole('button', { name: 'Summary Report' })).toBeInTheDocument();
+    expect(within(section).getByText('Specific Equipment')).toBeInTheDocument();
+    expect(within(section).getByText('*')).toBeInTheDocument();
 
-    fireEvent.click(within(section).getByRole('button', { name: 'Export Equipment History' }));
+    const exportButton = within(section).getByRole('button', { name: 'Export Equipment History' });
+    expect(exportButton).toBeDisabled();
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Select equipment...' }));
+    fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
+
+    expect(exportButton).toBeEnabled();
+
+    fireEvent.click(exportButton);
 
     const exportParams = mockExportData.mock.calls[0][1] as Record<string, unknown>;
-    expect(exportParams.report_version).toBe('v2');
+    expect(exportParams.item_id).toBe('ITEM-001');
   });
 
   it('requires anchor date for rolling 7 day borrower export mode', () => {
@@ -203,6 +197,9 @@ describe('ImportExportSettings', () => {
 
     const movementSection = movementCard as HTMLElement;
     const exportMovementsButton = within(movementSection).getByRole('button', { name: 'Export Equipment History' });
+
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'Select equipment...' }));
+    fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
 
     fireEvent.click(within(movementSection).getByRole('button', { name: 'Select timeline' }));
     fireEvent.click(screen.getByRole('button', { name: 'Rolling 7 Day' }));

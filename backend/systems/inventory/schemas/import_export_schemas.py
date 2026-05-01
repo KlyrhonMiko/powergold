@@ -62,6 +62,7 @@ class EntrustedExportFilters(ExportReportFilterBase):
 
 
 class LedgerRequestsExportFilters(ExportReportFilterBase):
+    report_version: str = Field(default="v2", pattern="^(v1|v2)$")
     status: str | None = None
     item_id: str | None = None
     borrower_id: str | None = None
@@ -84,9 +85,16 @@ class LedgerRequestsExportFilters(ExportReportFilterBase):
 
 
 class LedgerMovementsExportFilters(ExportReportFilterBase):
+    report_version: str = Field(default="v2", pattern="^(v1|v2)$")
     movement_type: str | None = None
     item_id: str | None = None
     serial_number: str | None = Field(default=None, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_item_id_required(self) -> "LedgerMovementsExportFilters":
+        if not self.item_id or not self.item_id.strip():
+            raise ValueError("item_id is required for Equipment History export")
+        return self
 
     @field_validator("movement_type", mode="before")
     @classmethod

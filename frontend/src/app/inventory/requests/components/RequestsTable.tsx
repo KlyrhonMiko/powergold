@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { parseSystemDate } from '@/lib/utils';
 import type { BorrowRecord, BorrowAction, StatusTab } from '../lib/types';
-import type { BorrowRequestEvent } from '../api';
+import type { BorrowRequestBatch, BorrowRequestEvent, BorrowRequestUnit } from '../api';
 
 function StatusBadge({ status, closeReason }: { status: string; closeReason?: string }) {
   const config: Record<string, { bg: string; text: string; icon: ReactNode }> = {
@@ -100,23 +100,59 @@ function formatEventDate(dateStr: string) {
   }
 }
 
+function renderDueDate(dateStr?: string, status?: string) {
+  if (!dateStr) {
+    return <span className="text-xs text-muted-foreground">Not set</span>;
+  }
+
+  try {
+    const dueDate = parseSystemDate(dateStr);
+    if (isNaN(dueDate.getTime())) {
+      return <span className="text-xs text-muted-foreground">{dateStr}</span>;
+    }
+
+    const isResolved = status === 'returned' || status === 'closed' || status === 'rejected';
+    const isOverdue = !isResolved && dueDate.getTime() < Date.now();
+
+    return (
+      <div className="flex flex-col whitespace-nowrap">
+        <span className={`text-xs font-medium ${isOverdue ? 'text-rose-600' : 'text-foreground'}`}>
+          {formatDate(dateStr)}
+        </span>
+        {isOverdue && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-rose-600">Overdue</span>
+        )}
+      </div>
+    );
+  } catch {
+    return <span className="text-xs text-muted-foreground">{dateStr}</span>;
+  }
+}
+
 function ExpandedDetails({
   record,
   requestEvents,
   loadingEvents,
+  assignmentsMap,
+  loadingAssignments,
 }: {
   record: BorrowRecord;
   requestEvents: Record<string, BorrowRequestEvent[]>;
   loadingEvents: Record<string, boolean>;
+  assignmentsMap: Record<string, { units: BorrowRequestUnit[]; batches: BorrowRequestBatch[] }>;
+  loadingAssignments: Record<string, boolean>;
 }) {
   const events = requestEvents[record.request_id];
   const isLoading = loadingEvents[record.request_id];
+  const assignments = assignmentsMap[record.request_id];
+  const isLoadingAssignments = loadingAssignments[record.request_id];
+  const hasAssignmentDetails = !!assignments && (assignments.units.length > 0 || assignments.batches.length > 0);
 
   return (
     <tr className="border-b border-border/30">
       <td className="p-0" colSpan={8}>
         <div className="px-6 py-5 pl-14 bg-muted/20 animate-in slide-in-from-top-1 duration-200">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-5xl">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 max-w-6xl">
             {/* Items table */}
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
@@ -150,6 +186,94 @@ function ExpandedDetails({
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-1.5">
+                <PackageOpen className="w-3.5 h-3.5" />
+                Return Details
+              </h4>
+
+              {isLoadingAssignments ? (
+                <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-xs">Loading return details...</span>
+                </div>
+              ) : hasAssignmentDetails ? (
+                <div className="space-y-4">
+                  {assignments.units.length > 0 && (
+                    <div className="rounded-lg border border-border/60 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/40 border-b border-border/40">
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Unit</th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Return Condition</th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Returned</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {assignments.units.map((unit) => (
+                            <tr key={unit.borrow_unit_id} className="hover:bg-muted/10">
+                              <td className="px-3 py-2.5">
+                                <div className="font-medium text-foreground font-mono">{unit.unit_id}</div>
+                                <div className="text-muted-foreground text-[10px] mt-0.5">
+                                  {unit.serial_number || 'No serial'}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-muted-foreground capitalize">
+                                {unit.condition_on_return?.replace(/_/g, ' ') || 'No change'}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-semibold text-foreground">
+                                {unit.returned_at ? 'Yes' : 'No'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {assignments.batches.length > 0 && (
+                    <div className="rounded-lg border border-border/60 overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/40 border-b border-border/40">
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">Batch</th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Assigned</th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Returned</th>
+                            <th className="px-3 py-2 text-right font-medium text-muted-foreground">Not Returned</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {assignments.batches.map((batch) => (
+                            <tr key={batch.borrow_batch_id} className="hover:bg-muted/10">
+                              <td className="px-3 py-2.5">
+                                <div className="font-medium text-foreground font-mono">{batch.batch_id}</div>
+                                <div className="text-muted-foreground text-[10px] mt-0.5">
+                                  {[batch.item_id, batch.item_name].filter(Boolean).join(' · ') || 'Untrackable item'}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-semibold text-foreground">
+                                {batch.qty_assigned}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-semibold text-emerald-700">
+                                {batch.qty_returned ?? 0}
+                              </td>
+                              <td className="px-3 py-2.5 text-right font-semibold text-amber-700">
+                                {batch.qty_not_returned ?? batch.qty_assigned}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="py-6 text-center text-xs text-muted-foreground border border-dashed border-border/60 rounded-lg">
+                  No assignment or return details recorded.
+                </div>
+              )}
             </div>
 
             {/* Timeline */}
@@ -214,6 +338,8 @@ export function RequestsTable({
   onToggleRow,
   requestEvents,
   loadingEvents,
+  assignmentsMap,
+  loadingAssignments,
   statusFilter,
   onClearStatusFilter,
   onSetConfirmingAction,
@@ -228,6 +354,8 @@ export function RequestsTable({
   onToggleRow: (requestId: string) => void;
   requestEvents: Record<string, BorrowRequestEvent[]>;
   loadingEvents: Record<string, boolean>;
+  assignmentsMap: Record<string, { units: BorrowRequestUnit[]; batches: BorrowRequestBatch[] }>;
+  loadingAssignments: Record<string, boolean>;
   statusFilter: StatusTab;
   onClearStatusFilter: () => void;
   onSetConfirmingAction: (args: { action: BorrowAction; requestId: string; actionLabel: string }) => void;
@@ -312,6 +440,7 @@ export function RequestsTable({
             <th className="py-3 px-4">Client / Location</th>
             <th className="py-3 px-4 text-center">Qty</th>
             <th className="py-3 px-4">Status</th>
+            <th className="py-3 px-4">Due Date</th>
             <th className="py-3 px-4">Requested</th>
             <th className="py-3 px-4 pr-5 text-right">Actions</th>
           </tr>
@@ -319,7 +448,7 @@ export function RequestsTable({
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={8} className="py-16 text-center">
+              <td colSpan={9} className="py-16 text-center">
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <Loader2 className="w-6 h-6 animate-spin text-primary" />
                   <p className="text-sm">Loading requests...</p>
@@ -328,7 +457,7 @@ export function RequestsTable({
             </tr>
           ) : records.length === 0 ? (
             <tr>
-              <td colSpan={8} className="py-16 text-center">
+              <td colSpan={9} className="py-16 text-center">
                 <div className="flex flex-col items-center gap-2">
                   <PackageOpen className="w-8 h-8 text-muted-foreground/40" />
                   <p className="text-sm font-medium text-muted-foreground">No requests found</p>
@@ -413,6 +542,10 @@ export function RequestsTable({
                     <StatusBadge status={record.status} closeReason={record.close_reason} />
                   </td>
 
+                  <td className="py-3.5 px-4">
+                    {renderDueDate(record.return_at, record.status)}
+                  </td>
+
                   <td className="py-3.5 px-4 text-sm text-muted-foreground whitespace-nowrap">
                     {formatDate(record.request_date)}
                   </td>
@@ -427,6 +560,8 @@ export function RequestsTable({
                     record={record}
                     requestEvents={requestEvents}
                     loadingEvents={loadingEvents}
+                    assignmentsMap={assignmentsMap}
+                    loadingAssignments={loadingAssignments}
                   />
                 )}
               </Fragment>

@@ -6,6 +6,7 @@ interface BorrowSubmissionInput {
   employeePin: string;
   customerName: string;
   locationName: string;
+  dueDate: string;
 }
 
 export function validatePinVerificationInput(employeeId: string, pinDraft: string): string | null {
@@ -22,6 +23,8 @@ export function validatePinVerificationInput(employeeId: string, pinDraft: strin
 }
 
 export function validateBorrowSubmission(input: BorrowSubmissionInput): string | null {
+  const requiresDueDate = input.cart.length > 0 && input.cart.every((cartItem) => cartItem.is_trackable);
+
   if (input.cart.length === 0) {
     return 'Add at least one item to the request';
   }
@@ -50,6 +53,21 @@ export function validateBorrowSubmission(input: BorrowSubmissionInput): string |
 
   if (!input.locationName.trim()) {
     return 'Client location is required';
+  }
+
+  if (requiresDueDate) {
+    if (!input.dueDate.trim()) {
+      return 'Due date is required for equipment requests';
+    }
+
+    const dueDate = new Date(input.dueDate);
+    if (Number.isNaN(dueDate.getTime())) {
+      return 'Due date is invalid';
+    }
+
+    if (dueDate.getTime() <= Date.now()) {
+      return 'Due date must be in the future';
+    }
   }
 
   return null;

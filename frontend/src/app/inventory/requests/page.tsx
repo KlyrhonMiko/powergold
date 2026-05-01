@@ -25,6 +25,7 @@ export default function BorrowsPage() {
 
   const [requestEvents, setRequestEvents] = useState<Record<string, BorrowRequestEvent[]>>({});
   const [loadingEvents, setLoadingEvents] = useState<Record<string, boolean>>({});
+  const [loadingAssignments, setLoadingAssignments] = useState<Record<string, boolean>>({});
 
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusTab>('ALL');
@@ -74,6 +75,7 @@ export default function BorrowsPage() {
   }, [requestEvents]);
 
   const fetchAssignments = useCallback(async (requestId: string) => {
+    setLoadingAssignments(prev => ({ ...prev, [requestId]: true }));
     try {
       const [units, batches] = await Promise.all([
         borrowApi.getAssignedUnits(requestId),
@@ -85,6 +87,8 @@ export default function BorrowsPage() {
       }));
     } catch (err) {
       logger.error('Failed to fetch borrow request assignments', { error: err, requestId });
+    } finally {
+      setLoadingAssignments(prev => ({ ...prev, [requestId]: false }));
     }
   }, []);
 
@@ -141,6 +145,7 @@ export default function BorrowsPage() {
       } else {
         next.add(requestId);
         void fetchRequestEvents(requestId);
+        void fetchAssignments(requestId);
       }
       return next;
     });
@@ -172,6 +177,8 @@ export default function BorrowsPage() {
           onToggleRow={toggleRow}
           requestEvents={requestEvents}
           loadingEvents={loadingEvents}
+          assignmentsMap={assignmentsMap}
+          loadingAssignments={loadingAssignments}
           statusFilter={statusFilter}
           onClearStatusFilter={() => setStatusFilter('ALL')}
           onSetConfirmingAction={(args) => setConfirmingAction(args)}
@@ -221,6 +228,7 @@ export default function BorrowsPage() {
             invalidateList();
             if (expandedIds.has(requestId)) {
               void fetchRequestEvents(requestId, true);
+              void fetchAssignments(requestId);
             }
           }}
         />
