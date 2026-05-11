@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { FormSelect } from '@/components/ui/form-select';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -8,21 +8,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { format as formatDateFns } from 'date-fns';
 import {
   Download,
-  Upload,
   History,
   FileText,
   CheckCircle2,
   XCircle,
   RefreshCcw,
   ArrowRight,
-  FileSpreadsheet,
   FilePieChart,
   ShieldCheck,
   Barcode,
   Layers,
   AlertCircle,
   Sparkles,
-  Table as TableIcon
+  Table as TableIcon,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import {
@@ -31,30 +29,25 @@ import {
   composeMovementExportParams,
   isRolling7DayTimelineMode,
   useImportHistory,
-  useImportInventory,
   useExportData,
-  useDownloadTemplate,
   ImportHistoryItem,
   ImportHistoryErrorLogEntry,
 } from '../lib/useImportExport';
 import { useInventoryItems, useInventoryUnits } from '@/app/inventory/items/lib/useItemQueries';
 import { User as SystemUser } from '@/app/admin/users/api';
 import { logger } from '@/lib/logger';
+import { ImportPreviewCard } from './ImportPreviewCard';
 
 export function ImportExportSettings() {
   const [page, setPage] = useState(1);
   const perPage = 5;
-  const [duplicateMode, setDuplicateMode] = useState('skip');
   const [isIntegrityModalOpen, setIsIntegrityModalOpen] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<ImportHistoryItem | null>(null);
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Hooks
   const { data: historyResponse, isLoading: historyLoading } = useImportHistory(page, perPage);
-  const mutation = useImportInventory();
   const { exportData } = useExportData();
-  const { downloadTemplate } = useDownloadTemplate();
   const { data: itemsResponse } = useInventoryItems({ per_page: 500, is_trackable: true });
   const items = itemsResponse?.data || [];
   const equipmentItems = items.filter((item) => item.is_trackable !== false);
@@ -110,15 +103,6 @@ export function ImportExportSettings() {
   const { data: itemUnitsResponse } = useInventoryUnits(selectedMovementItemId, { per_page: 500 }, Boolean(selectedMovementItemId));
   const itemUnits = itemUnitsResponse?.data || [];
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      mutation.mutate({ file, mode: duplicateMode });
-      // Reset input value to allow selecting the same file again
-      e.target.value = '';
-    }
-  };
-
   const importHistory = historyResponse?.data || [];
   const meta = historyResponse?.meta;
   const borrowHistoryNeedsAnchorDate = isRolling7DayTimelineMode(borrowParams.timeline_mode);
@@ -138,88 +122,7 @@ export function ImportExportSettings() {
 
       {/* Import Section */}
       <div className="grid gap-8 lg:grid-cols-2">
-        <Card className="flex flex-col">
-          <CardHeader className="flex flex-row items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-              <Upload className="w-6 h-6" />
-            </div>
-            <div>
-              <CardTitle>Import Inventory Catalog</CardTitle>
-              <CardDescription>Upload CSV files to bulk update or add inventory items.</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-1 space-y-6">
-            <div
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed border-border rounded-2xl p-8 flex flex-col items-center justify-center gap-4 bg-muted/10 hover:bg-muted/20 transition-all cursor-pointer group ${mutation.isPending ? 'opacity-50 pointer-events-none' : ''}`}
-            >
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept=".csv"
-                onChange={handleFileSelect}
-              />
-              <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center text-muted-foreground group-hover:scale-110 transition-transform">
-                {mutation.isPending ? <RefreshCcw className="w-8 h-8 animate-spin" /> : <FileSpreadsheet className="w-8 h-8" />}
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-semibold">{mutation.isPending ? 'Importing...' : 'Click to upload or drag and drop'}</p>
-                <p className="text-xs text-muted-foreground mt-1">Accepted format: CSV only (max 10MB)</p>
-              </div>
-              <button
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90 transition-colors"
-                disabled={mutation.isPending}
-              >
-                {mutation.isPending ? 'Processing...' : 'Select File'}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-xl bg-primary/5 border border-primary/10">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                  <Download className="w-4 h-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold">Download CSV Template</p>
-                  <p className="text-xs text-muted-foreground">Standardized template for bulk imports.</p>
-                </div>
-              </div>
-              <button
-                onClick={downloadTemplate}
-                className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-bold hover:bg-primary/90"
-              >
-                Download
-              </button>
-            </div>
-
-            <div className="grid gap-4">
-              <label className="text-sm font-semibold px-1">Duplicate Handling</label>
-              <div className="grid grid-cols-2 gap-2">
-                {['Skip', 'Overwrite'].map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setDuplicateMode(mode.toLowerCase())}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold transition-all border ${duplicateMode === mode.toLowerCase()
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-card text-muted-foreground border-border hover:bg-muted'
-                      }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="p-6 border-t border-border/50">
-            <button
-              onClick={() => setIsIntegrityModalOpen(true)}
-              className="w-full h-12 flex items-center justify-center gap-2 bg-muted hover:bg-muted/80 text-muted-foreground rounded-xl text-sm font-bold transition-all border border-border/50 hover:border-primary/30 group"
-            >
-              View Import Rules & Validation <FileText className="w-4 h-4 group-hover:text-primary transition-colors" />
-            </button>
-          </CardFooter>
-        </Card>
+        <ImportPreviewCard />
 
         <Card className="flex flex-col">
           <CardHeader className="flex flex-row items-center gap-4">

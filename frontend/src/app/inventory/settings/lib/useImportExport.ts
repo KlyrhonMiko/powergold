@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
+import type { PreviewSummary, PreviewRow, ApplyResult } from './types';
 
 export interface ImportHistoryErrorLogEntry {
   row?: number | string;
@@ -293,4 +294,222 @@ export function useDownloadTemplate() {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Preview hooks
+// ---------------------------------------------------------------------------
+
+export function useImportPreview() {
+  return useMutation({
+    mutationFn: async ({ file, mode }: { file: File; mode: string }) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post<PreviewSummary>(`/inventory/data/import/preview?mode=${mode}`, formData);
+      return response.data;
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Preview failed'));
+    },
+  });
+}
+
+export function usePreviewSummary(previewId: string | null) {
+  return useQuery({
+    queryKey: ['inventory', 'import', 'preview', previewId, 'summary'],
+    queryFn: async () => {
+      const response = await api.get<PreviewSummary>(`/inventory/data/import/preview/${previewId}`);
+      return response.data;
+    },
+    enabled: Boolean(previewId),
+  });
+}
+
+export function usePreviewRows(previewId: string | null, page: number, perPage: number, filterStatus: string, groupKey: string | null = null) {
+  return useQuery({
+    queryKey: ['inventory', 'import', 'preview', previewId, 'rows', page, perPage, filterStatus, groupKey],
+    queryFn: async () => {
+      let url = `/inventory/data/import/preview/${previewId}/rows?page=${page}&per_page=${perPage}&filter_status=${filterStatus}`;
+      if (groupKey) {
+        url += `&group_key=${encodeURIComponent(groupKey)}`;
+      }
+      const response = await api.get<PreviewRow[]>(url);
+      return response;
+    },
+    enabled: Boolean(previewId),
+  });
+}
+
+export function useEditRow(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ rowNumber, updates }: { rowNumber: number; updates: Record<string, string> }) => {
+      const response = await api.patch<PreviewRow>(
+        `/inventory/data/import/preview/${previewId}/rows/${rowNumber}`,
+        { updates }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'preview', previewId, 'summary'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Failed to update row'));
+    },
+  });
+}
+
+export function useApplyImport(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post<ApplyResult>(`/inventory/data/import/preview/${previewId}/apply`);
+      return response.data;
+    },
+    onSuccess: (data: ApplyResult) => {
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'items'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'history'] });
+
+      if (data.status === 'completed') {
+        toast.success(`Import completed: ${data.success} rows imported successfully.`);
+      } else if (data.status === 'failed') {
+        toast.error(`Import failed: ${data.failed} rows failed.`);
+      } else {
+        toast.success('Import applied.');
+      }
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Import failed'));
+    },
+  });
+}
+
+export function useDownloadCorrectedCsv(previewId: string | null) {
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.getRaw(`/inventory/data/import/preview/${previewId}/download`);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', 'corrected_import.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    },
+    onSuccess: () => {
+      toast.success('Corrected CSV downloaded.');
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Download failed'));
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Action hooks
+// ---------------------------------------------------------------------------
+
+export function useAcceptRecommended(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post<{ accepted: number }>(
+        `/inventory/data/import/preview/${previewId}/actions/accept-recommended`
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.accepted} recommended actions accepted.`);
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'preview', previewId, 'summary'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Failed to accept recommended actions'));
+    },
+  });
+}
+
+export function useSetGroupAction(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ groupKey, action }: { groupKey: string; action: string }) => {
+      const response = await api.post<{ group_key: string; action: string; affected: number }>(
+        `/inventory/data/import/preview/${previewId}/actions/group`,
+        { group_key: groupKey, action }
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Action "${data.action}" applied to ${data.affected} rows.`);
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'preview', previewId, 'summary'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Failed to set group action'));
+    },
+  });
+}
+
+export function useSetRowAction(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ rowNumber, action }: { rowNumber: number; action: string }) => {
+      const response = await api.post<PreviewRow>(
+        `/inventory/data/import/preview/${previewId}/actions/row/${rowNumber}`,
+        { action }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'preview', previewId, 'summary'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Failed to set row action'));
+    },
+  });
+}
+
+export function useResetActions(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post<{ reset: number }>(
+        `/inventory/data/import/preview/${previewId}/actions/reset`
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.reset} action(s) reset.`);
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'preview', previewId, 'summary'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Failed to reset actions'));
+    },
+  });
+}
+
+export function useIgnoreAllBlockers(previewId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post<{ ignored: number }>(
+        `/inventory/data/import/preview/${previewId}/actions/ignore-all-blockers`
+      );
+      return response.data;
+    },
+    onSuccess: (data) => {
+      toast.success(`${data.ignored} row(s) ignored.`);
+      queryClient.invalidateQueries({ queryKey: ['inventory', 'import', 'preview', previewId, 'summary'] });
+    },
+    onError: (err: unknown) => {
+      toast.error(resolveErrorMessage(err, 'Failed to ignore blockers'));
+    },
+  });
 }

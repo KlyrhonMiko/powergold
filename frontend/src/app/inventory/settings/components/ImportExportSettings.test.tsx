@@ -65,7 +65,48 @@ vi.mock('../lib/useImportExport', async () => {
       },
       isLoading: false,
     }),
-    useImportInventory: () => ({
+    useImportPreview: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    usePreviewSummary: () => ({
+      data: null,
+      isLoading: false,
+    }),
+    usePreviewRows: () => ({
+      data: { data: [], meta: null },
+      isLoading: false,
+      refetch: vi.fn(),
+    }),
+    useEditRow: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useApplyImport: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useDownloadCorrectedCsv: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useAcceptRecommended: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useSetGroupAction: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useSetRowAction: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useResetActions: () => ({
+      mutate: vi.fn(),
+      isPending: false,
+    }),
+    useIgnoreAllBlockers: () => ({
       mutate: vi.fn(),
       isPending: false,
     }),

@@ -154,3 +154,93 @@ class ImportResponse(BaseModel):
     total: int
     success: int
     failed: int
+
+
+# ---------------------------------------------------------------------------
+# Preview schemas
+# ---------------------------------------------------------------------------
+
+class RowIssueRead(BaseModel):
+    field: str
+    code: str
+    severity: str  # error | warning | info
+    message: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PreviewRowRead(BaseModel):
+    row_number: int
+    original_values: dict[str, str]
+    normalized_values: dict[str, str]
+    resolved_values: dict[str, str]
+    status: str  # ready | warning | error | info
+    issues: list[RowIssueRead] = []
+    action: str | None = None  # ImportAction value
+    stock_interpretation: str = ""
+    duplicate_type: str | None = None
+    duplicate_subtype: str | None = None
+    recommended_action: str | None = None
+    selected_action: str | None = None
+    requires_user_decision: bool = False
+    group_key: str | None = None
+    target_match_summary: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DuplicateGroupRead(BaseModel):
+    key: str
+    label: str
+    count: int
+    severity: str
+    recommended_action: str | None = None
+    requires_user_decision: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PreviewSummary(BaseModel):
+    preview_id: str
+    filename: str
+    mode: str
+    delimiter: str
+    encoding: str
+    bom_detected: bool
+    file_size: int
+    total_rows: int
+    ready_count: int
+    warning_count: int
+    error_count: int
+    info_count: int
+    file_issues: list[RowIssueRead] = []
+    can_apply: bool
+    headers: list[str]
+    duplicate_groups: list[DuplicateGroupRead] = []
+    auto_resolved_count: int = 0
+    decision_required_count: int = 0
+    unresolved_blocker_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PreviewRowUpdateRequest(BaseModel):
+    updates: dict[str, str]
+
+
+class PreviewApplyResponse(BaseModel):
+    history_id: UUID
+    status: str
+    total: int
+    success: int
+    failed: int
+    has_file_errors: bool = False
+
+
+class GroupActionRequest(BaseModel):
+    group_key: str
+    action: str
+
+
+class RowActionRequest(BaseModel):
+    action: str
