@@ -11,7 +11,10 @@ from systems.inventory.models.borrow_request_item import BorrowRequestItem
 from systems.inventory.models.borrow_request_unit import BorrowRequestUnit
 from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
 from systems.inventory.models.inventory import InventoryItem
+from systems.inventory.models.inventory_movement import InventoryMovement
 from systems.inventory.schemas.borrow_request_schemas import (
+    BorrowRequestBatchRead,
+    BorrowRequestBatchReturn,
     BorrowRequestCreate,
     BorrowRequestEventRead,
     BorrowRequestEventGlobalRead,
@@ -468,13 +471,9 @@ class BorrowService(
             }
             for assignment in assigned_units
         ]
-        payload["assigned_batches"] = [
-            {
-                **assignment.model_dump(mode="json"),
-                "batch_id": assignment.batch_id,
-            }
-            for assignment in assigned_batches
-        ]
+        payload["assigned_batches"] = self.serialize_assigned_batches(
+            session, borrow_req, assigned_batches=assigned_batches
+        )
         payload["involved_people"] = [
             {
                 "user_id": participant_user_id_map.get(participant.user_uuid),
@@ -485,6 +484,114 @@ class BorrowService(
             for participant in participants
         ] or None
         return BorrowRequestRead.model_validate(payload)
+
+    def _build_batch_return_qty_map(
+        self,
+        session: Session,
+        request_id: str,
+        assigned_batches: list[BorrowRequestBatch],
+    ) -> dict[UUID, int]:
+        batch_uuids = [assignment.batch_uuid for assignment in assigned_batches if assignment.batch_uuid]
+        if not batch_uuids:
+            return {}
+
+        return_movements = list(
+            session.exec(
+                select(InventoryMovement)
+                .where(
+                    InventoryMovement.reference_id == request_id,
+                    InventoryMovement.movement_type == "borrow_return",
+                    InventoryMovement.batch_uuid.in_(batch_uuids),
+                )
+                .order_by(InventoryMovement.occurred_at.asc())
+            ).all()
+        )
+        if not return_movements:
+            return {}
+
+        reversed_movement_ids = {
+            movement.reference_id
+            for movement in session.exec(
+                select(InventoryMovement).where(
+                    InventoryMovement.movement_type == "reversal",
+                    InventoryMovement.reference_id.in_(
+                        [movement.movement_id for movement in return_movements]
+                    ),
+                )
+            ).all()
+            if movement.reference_id
+        }
+
+        qty_by_batch: dict[UUID, int] = {}
+        for movement in return_movements:
+            if movement.movement_id in reversed_movement_ids or movement.batch_uuid is None:
+                continue
+            qty_by_batch[movement.batch_uuid] = (
+                qty_by_batch.get(movement.batch_uuid, 0) + max(movement.qty_change, 0)
+            )
+        return qty_by_batch
+
+    def serialize_assigned_batches(
+        self,
+        session: Session,
+        borrow_req: BorrowRequest,
+        assigned_batches: list[BorrowRequestBatch] | None = None,
+    ) -> list[BorrowRequestBatchRead]:
+        if assigned_batches is None:
+            if not borrow_req.id:
+                return []
+            assigned_batches = list(
+                session.exec(
+                    select(BorrowRequestBatch)
+                    .where(
+                        BorrowRequestBatch.borrow_uuid == borrow_req.id,
+                        BorrowRequestBatch.is_deleted.is_(False),
+                    )
+                    .order_by(BorrowRequestBatch.created_at.asc())
+                ).all()
+            )
+
+        item_uuids = {
+            assignment.inventory_batch.inventory_uuid
+            for assignment in assigned_batches
+            if assignment.inventory_batch is not None
+        }
+        item_details_map = self._build_item_details_map(session, item_uuids)
+        qty_returned_map = self._build_batch_return_qty_map(
+            session, borrow_req.request_id, assigned_batches
+        )
+
+        return [
+            BorrowRequestBatchRead.model_validate(
+                {
+                    **assignment.model_dump(mode="json"),
+                    "batch_id": assignment.batch_id,
+                    "item_id": item_details_map.get(
+                        assignment.inventory_batch.inventory_uuid, {}
+                    ).get("item_id")
+                    if assignment.inventory_batch
+                    else None,
+                    "item_name": item_details_map.get(
+                        assignment.inventory_batch.inventory_uuid, {}
+                    ).get("name")
+                    if assignment.inventory_batch
+                    else None,
+                    "qty_returned": qty_returned_map.get(
+                        assignment.batch_uuid,
+                        assignment.qty_assigned if assignment.returned_at is not None else 0,
+                    ),
+                    "qty_not_returned": max(
+                        assignment.qty_assigned
+                        - qty_returned_map.get(
+                            assignment.batch_uuid,
+                            assignment.qty_assigned if assignment.returned_at is not None else 0,
+                        ),
+                        0,
+                    ),
+                }
+            )
+            for assignment in assigned_batches
+        ]
 
     @staticmethod
     def _parse_receipt_datetime(value: object) -> datetime | None:
@@ -560,7 +667,33 @@ class BorrowService(
         snapshot["expected_return_at"] = (
             receipt.expected_return_at.isoformat() if receipt.expected_return_at else None
         )
+        snapshot["returned_at"] = (
+            receipt.returned_at.isoformat() if receipt.returned_at else None
+        )
         return snapshot
+
+    @staticmethod
+    def _merge_receipt_snapshot_with_live_receipt(
+        snapshot_receipt: "ReleaseReceiptRead",
+        live_receipt: "ReleaseReceiptRead",
+    ) -> "ReleaseReceiptRead":
+        return live_receipt.model_copy(
+            update={
+                "transaction_ref": snapshot_receipt.transaction_ref,
+                "receipt_number": snapshot_receipt.receipt_number,
+                "borrower_name": snapshot_receipt.borrower_name,
+                "borrower_user_id": snapshot_receipt.borrower_user_id,
+                "customer_name": snapshot_receipt.customer_name,
+                "location_name": snapshot_receipt.location_name,
+                "released_at": snapshot_receipt.released_at,
+                "released_by_name": snapshot_receipt.released_by_name,
+                "expected_return_at": snapshot_receipt.expected_return_at,
+                "is_emergency": snapshot_receipt.is_emergency,
+                "approval_channel": snapshot_receipt.approval_channel,
+                "notes": snapshot_receipt.notes,
+                "borrower_signature": snapshot_receipt.borrower_signature,
+            }
+        )
 
     def generate_release_receipt(
         self, session: Session, request_id: str
@@ -574,20 +707,26 @@ class BorrowService(
         if not db_request:
             raise ValueError("Request not found")
 
-        if db_request.receipt_snapshot:
-            return self._hydrate_release_receipt_snapshot(
-                db_request.receipt_snapshot,
-                db_request,
-            )
-
         if db_request.status not in ("released", "returned", "closed"):
             raise ValueError("Receipt is only available for released requests")
 
         user_id_map = self._build_user_id_map(
-            session, {db_request.borrower_uuid, db_request.released_by}
+            session,
+            {
+                db_request.borrower_uuid,
+                db_request.released_by,
+                db_request.returned_by,
+                db_request.received_by,
+            },
         )
         user_name_map = self._build_user_name_map(
-            session, {db_request.borrower_uuid, db_request.released_by}
+            session,
+            {
+                db_request.borrower_uuid,
+                db_request.released_by,
+                db_request.returned_by,
+                db_request.received_by,
+            },
         )
 
         request_items = session.exec(
@@ -604,6 +743,7 @@ class BorrowService(
 
         receipt_items = []
         request_units = []
+        serialized_batch_assignments = self.serialize_assigned_batches(session, db_request)
         if any(details.get("is_trackable") for details in item_details_map.values()):
             request_units = session.exec(
                 select(BorrowRequestUnit).where(
@@ -615,28 +755,56 @@ class BorrowService(
         for borrow_item in request_items:
             details = item_details_map.get(borrow_item.item_uuid, {})
             serial_numbers = []
+            qty_returned = 0
+            qty_not_returned = borrow_item.qty_requested
+            batch_details: list[dict[str, Any]] = []
             if details.get("is_trackable"):
+                matching_units = [
+                    u
+                    for u in request_units
+                    if u.inventory_unit
+                    and u.inventory_unit.inventory_uuid == borrow_item.item_uuid
+                ]
                 serial_numbers = [
                     u.inventory_unit.serial_number
-                    for u in request_units
-                    if u.inventory_unit and u.inventory_unit.inventory_uuid == borrow_item.item_uuid
-                    and u.inventory_unit.serial_number
+                    for u in matching_units
+                    if u.inventory_unit and u.inventory_unit.serial_number
                 ]
+                qty_returned = sum(1 for u in matching_units if u.returned_at is not None)
+                qty_not_returned = max(borrow_item.qty_requested - qty_returned, 0)
+            else:
+                batch_details = [
+                    {
+                        "batch_id": assignment.batch_id,
+                        "qty_released": assignment.qty_assigned,
+                        "qty_returned": assignment.qty_returned,
+                        "qty_not_returned": assignment.qty_not_returned,
+                    }
+                    for assignment in serialized_batch_assignments
+                    if assignment.item_id == details.get("item_id")
+                ]
+                qty_returned = sum(detail["qty_returned"] for detail in batch_details)
+                qty_not_returned = sum(detail["qty_not_returned"] for detail in batch_details)
 
             receipt_items.append(
                 ReleaseReceiptItemRead(
                     item_id=details.get("item_id", ""),
                     name=details.get("name", ""),
                     classification=details.get("classification"),
+                    is_trackable=details.get("is_trackable", False),
                     qty_released=borrow_item.qty_requested,
+                    qty_returned=qty_returned,
+                    qty_not_returned=qty_not_returned,
                     serial_numbers=serial_numbers,
+                    batch_details=batch_details,
                 )
             )
 
-        receipt = ReleaseReceiptRead(
+        live_receipt = ReleaseReceiptRead(
             request_id=db_request.request_id,
             transaction_ref=db_request.transaction_ref,
             receipt_number=f"RCT-{db_request.request_id}",
+            status=db_request.status,
             borrower_name=user_name_map.get(db_request.borrower_uuid),
             borrower_user_id=user_id_map.get(db_request.borrower_uuid),
             customer_name=db_request.customer_name,
@@ -644,13 +812,24 @@ class BorrowService(
             released_at=db_request.released_at,
             released_by_name=user_name_map.get(db_request.released_by),
             expected_return_at=db_request.return_at,
+            returned_at=db_request.returned_at,
+            returned_by_name=user_name_map.get(db_request.received_by or db_request.returned_by),
             is_emergency=db_request.is_emergency or False,
             approval_channel=db_request.approval_channel or "standard",
             notes=db_request.notes,
             items=receipt_items,
             borrower_signature=db_request.borrower_signature,
         )
-        return receipt
+        if db_request.receipt_snapshot:
+            snapshot_receipt = self._hydrate_release_receipt_snapshot(
+                db_request.receipt_snapshot,
+                db_request,
+            )
+            return self._merge_receipt_snapshot_with_live_receipt(
+                snapshot_receipt,
+                live_receipt,
+            )
+        return live_receipt
 
     def save_signature(
         self, session: Session, request_id: str, signature_data: str
@@ -1508,6 +1687,7 @@ class BorrowService(
         actor_id: UUID,
         note: str | None = None,
         unit_returns: list[BorrowRequestUnitReturn] | None = None,
+        batch_returns: list[BorrowRequestBatchReturn] | None = None,
     ) -> BorrowRequest:
         stage_4 = "released"
         stage_5 = "returned"
@@ -1518,6 +1698,29 @@ class BorrowService(
         unit_return_map = {
             unit_return.unit_id: unit_return for unit_return in (unit_returns or [])
         }
+        batch_return_map = {
+            batch_return.borrow_batch_id: batch_return
+            for batch_return in (batch_returns or [])
+        }
+        if batch_returns is not None and len(batch_return_map) != len(batch_returns):
+            raise ValueError("borrow_batch_id values must be unique within a return request")
+
+        active_batch_assignments = [
+            assignment
+            for assignment in db_request.assigned_batches
+            if assignment.inventory_batch
+            and assignment.released_at is not None
+            and assignment.returned_at is None
+        ]
+        if batch_returns is not None and active_batch_assignments:
+            expected_batch_ids = {
+                assignment.borrow_batch_id for assignment in active_batch_assignments
+            }
+            provided_batch_ids = set(batch_return_map)
+            if provided_batch_ids != expected_batch_ids:
+                raise ValueError(
+                    "Return payload for non-trackable items must include all released batch assignments"
+                )
 
         for borrow_item in db_request.items:
             item = borrow_item.inventory_item
@@ -1607,19 +1810,31 @@ class BorrowService(
                 
                 if batch_assignments:
                     for ba in batch_assignments:
+                        requested_return = batch_return_map.get(ba.borrow_batch_id)
+                        qty_returned = (
+                            requested_return.qty_returned
+                            if requested_return is not None
+                            else ba.qty_assigned
+                        )
+                        if qty_returned > ba.qty_assigned:
+                            raise ValueError(
+                                f"Returned quantity for batch {ba.batch_id} cannot exceed assigned quantity {ba.qty_assigned}"
+                            )
+
                         ba.returned_at = get_now_manila()
                         session.add(ba)
-                        
-                        self.inventory_service.adjust_stock(
-                            session,
-                            item.item_id,
-                            ba.qty_assigned,
-                            movement_type="borrow_return",
-                            reference_id=db_request.request_id,
-                            reference_type="borrow_request",
-                            actor_id=actor_id,
-                            batch_id=ba.inventory_batch.batch_id,
-                        )
+
+                        if qty_returned > 0:
+                            self.inventory_service.adjust_stock(
+                                session,
+                                item.item_id,
+                                qty_returned,
+                                movement_type="borrow_return",
+                                reference_id=db_request.request_id,
+                                reference_type="borrow_request",
+                                actor_id=actor_id,
+                                batch_id=ba.inventory_batch.batch_id,
+                            )
                 else:
                     raise ValueError(
                         f"Released non-trackable item {item.item_id} has no batch assignments to return"

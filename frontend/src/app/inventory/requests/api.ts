@@ -17,6 +17,7 @@ export interface BorrowRequest {
   status: string;
   notes?: string;
   request_date: string;
+  return_at?: string;
   approved_at?: string;
   released_at?: string;
   returned_at?: string;
@@ -48,9 +49,15 @@ export interface BorrowUnitReturn {
   notes?: string;
 }
 
+export interface BorrowBatchReturn {
+  borrow_batch_id: string;
+  qty_returned: number;
+}
+
 export interface BorrowReturnPayload {
   notes?: string;
   unit_returns?: BorrowUnitReturn[];
+  batch_returns?: BorrowBatchReturn[];
 }
 
 export interface BorrowBatchAssignment {
@@ -120,7 +127,11 @@ export interface BorrowEventsParams {
 export interface BorrowRequestBatch {
   borrow_batch_id: string;
   batch_id: string;
+  item_id?: string;
+  item_name?: string;
   qty_assigned: number;
+  qty_returned?: number;
+  qty_not_returned?: number;
   assigned_at?: string;
   released_at?: string;
   returned_at?: string;
@@ -130,14 +141,24 @@ export interface ReleaseReceiptItem {
   item_id: string;
   name: string;
   classification?: string;
+  is_trackable?: boolean;
   qty_released: number;
+  qty_returned?: number;
+  qty_not_returned?: number;
   serial_numbers: string[];
+  batch_details?: Array<{
+    batch_id: string;
+    qty_released: number;
+    qty_returned: number;
+    qty_not_returned: number;
+  }>;
 }
 
 export interface ReleaseReceipt {
   request_id: string;
   transaction_ref: string;
   receipt_number: string;
+  status: string;
   borrower_name?: string;
   borrower_user_id?: string;
   customer_name?: string;
@@ -145,6 +166,8 @@ export interface ReleaseReceipt {
   released_at?: string;
   released_by_name?: string;
   expected_return_at?: string;
+  returned_at?: string;
+  returned_by_name?: string;
   is_emergency: boolean;
   approval_channel: string;
   notes?: string;

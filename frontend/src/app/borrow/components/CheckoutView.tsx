@@ -8,6 +8,7 @@ import {
   Package2,
   Building2,
   MapPin,
+  CalendarClock,
   Users,
   StickyNote,
   Loader2,
@@ -31,6 +32,8 @@ interface CheckoutViewProps {
   onCustomerNameChange: (v: string) => void;
   locationName: string;
   onLocationNameChange: (v: string) => void;
+  dueDate: string;
+  onDueDateChange: (v: string) => void;
   collaborators: string;
   onCollaboratorsChange: (v: string) => void;
   notes: string;
@@ -55,6 +58,8 @@ export function CheckoutView({
   onCustomerNameChange,
   locationName,
   onLocationNameChange,
+  dueDate,
+  onDueDateChange,
   collaborators,
   onCollaboratorsChange,
   notes,
@@ -67,12 +72,14 @@ export function CheckoutView({
   onOpenPinModal,
 }: CheckoutViewProps) {
   const isPinVerified = Boolean(employeePin.trim());
+  const requiresDueDate = cart.length > 0 && cart.every((item) => item.is_trackable);
   const isFormValid =
     cart.length > 0 &&
     employeeId.trim() &&
     employeePin.trim() &&
     customerName.trim() &&
-    locationName.trim();
+    locationName.trim() &&
+    (!requiresDueDate || dueDate.trim());
 
   const [itemsExpanded, setItemsExpanded] = useState(false);
 
@@ -265,6 +272,19 @@ export function CheckoutView({
                     className="w-full min-h-[72px] lg:min-h-[90px] pl-9 lg:pl-10 pr-4 py-3 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none disabled:bg-muted disabled:opacity-60"
                   />
                 </div>
+
+                {requiresDueDate && (
+                  <div className="relative group">
+                    <CalendarClock className="absolute left-3 lg:left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <input
+                      type="datetime-local"
+                      value={dueDate}
+                      onChange={(e) => onDueDateChange(e.target.value)}
+                      disabled={!isPinVerified}
+                      className="w-full h-11 lg:h-12 pl-9 lg:pl-10 pr-4 rounded-xl border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:bg-muted disabled:opacity-60"
+                    />
+                  </div>
+                )}
 
                 <div className="relative group">
                   <StickyNote className="absolute left-3 lg:left-3.5 top-3 w-4 h-4 text-muted-foreground group-focus-within:text-primary transition-colors" />

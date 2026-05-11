@@ -312,7 +312,10 @@ async def get_assigned_batches(
     if not db_request:
         raise HTTPException(status_code=404, detail="Request not found")
 
-    return create_success_response(data=db_request.assigned_batches, request=request)
+    return create_success_response(
+        data=borrow_service.serialize_assigned_batches(session, db_request),
+        request=request,
+    )
 
 
 @router.get(
@@ -358,6 +361,7 @@ async def return_request(
             actor_id=current_user.id,
             note=payload.notes,
             unit_returns=payload.unit_returns,
+            batch_returns=payload.batch_returns or None,
         )
         session.commit()
         await manager.broadcast_catalog_update()

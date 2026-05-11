@@ -55,31 +55,27 @@ describe('same-origin download and import paths', () => {
   it('composes borrower export params with backend names and omits all sentinel values', () => {
     const composed = composeBorrowHistoryExportParams({
       format: 'xlsx',
-      report_version: 'v2',
       status: 'all',
       timeline_mode: 'monthly',
       anchor_date: new Date(2026, 2, 10),
       borrower_id: ' BOR-1002 ',
-      include_receipt_rendered: true,
       include_deleted: false,
       include_archived: true,
     });
 
     const requestPath = buildExportDownloadPath('requests', composed);
 
-    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&report_version=v2&timeline_mode=monthly&borrower_id=BOR-1002&include_receipt_rendered=true&include_deleted=false&include_archived=true');
+    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&timeline_mode=monthly&borrower_id=BOR-1002&include_deleted=false&include_archived=true');
   });
 
-  it('allows legacy borrower export params by sending report_version v1', () => {
-    const requestPath = buildExportDownloadPath('requests', composeBorrowHistoryExportParams({
+  it('allows legacy borrower export params by sending report_version v1 directly', () => {
+    const requestPath = buildExportDownloadPath('requests', {
       format: 'xlsx',
       report_version: 'v1',
-      status: 'all',
-      timeline_mode: '',
       include_receipt_rendered: false,
       include_deleted: false,
       include_archived: false,
-    }));
+    });
 
     expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&report_version=v1&include_receipt_rendered=false&include_deleted=false&include_archived=false');
   });
@@ -90,25 +86,23 @@ describe('same-origin download and import paths', () => {
       status: 'all',
       timeline_mode: '',
       borrower_id: '',
-      include_receipt_rendered: false,
       include_deleted: false,
       include_archived: false,
     }));
 
-    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&include_receipt_rendered=false&include_deleted=false&include_archived=false');
+    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&include_deleted=false&include_archived=false');
   });
 
   it('does not forward serial_number when composing borrower export params', () => {
     const requestPath = buildExportDownloadPath('requests', composeBorrowHistoryExportParams({
       format: 'xlsx',
       timeline_mode: '',
-      include_receipt_rendered: false,
       include_deleted: false,
       include_archived: false,
       serial_number: 'SN-UI-SHOULD-NOT-SEND',
     }));
 
-    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&include_receipt_rendered=false&include_deleted=false&include_archived=false');
+    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&include_deleted=false&include_archived=false');
     expect(requestPath).not.toContain('serial_number=');
   });
 
@@ -116,18 +110,16 @@ describe('same-origin download and import paths', () => {
     const requestPath = buildExportDownloadPath('requests', composeBorrowHistoryExportParams({
       format: 'xlsx',
       timeline_mode: 'daily',
-      include_receipt_rendered: false,
       include_deleted: false,
       include_archived: false,
     }));
 
-    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&timeline_mode=daily&include_receipt_rendered=false&include_deleted=false&include_archived=false');
+    expect(requestPath).toBe('/inventory/data/export/ledger/requests?format=xlsx&timeline_mode=daily&include_deleted=false&include_archived=false');
   });
 
   it('composes movement export params and keeps anchor_date only for rolling_7_day', () => {
     const monthlyRequestPath = buildExportDownloadPath('movements', composeMovementExportParams({
       format: 'csv',
-      movement_type: 'all',
       item_id: ' ITEM-001 ',
       timeline_mode: 'yearly',
       anchor_date: new Date(2026, 3, 13),
@@ -138,8 +130,6 @@ describe('same-origin download and import paths', () => {
 
     const rollingRequestPath = buildExportDownloadPath('movements', composeMovementExportParams({
       format: 'csv',
-      report_version: 'v2',
-      movement_type: 'out',
       item_id: 'ITEM-002',
       timeline_mode: 'rolling_7_day',
       anchor_date: new Date(2026, 3, 13),
@@ -149,7 +139,7 @@ describe('same-origin download and import paths', () => {
     }));
 
     expect(monthlyRequestPath).toBe('/inventory/data/export/ledger/movements?format=csv&item_id=ITEM-001&timeline_mode=yearly&serial_number=SN-001&include_deleted=true&include_archived=false');
-    expect(rollingRequestPath).toBe('/inventory/data/export/ledger/movements?format=csv&report_version=v2&movement_type=out&item_id=ITEM-002&timeline_mode=rolling_7_day&anchor_date=2026-04-13&serial_number=SN-909&include_deleted=false&include_archived=true');
+    expect(rollingRequestPath).toBe('/inventory/data/export/ledger/movements?format=csv&item_id=ITEM-002&timeline_mode=rolling_7_day&anchor_date=2026-04-13&serial_number=SN-909&include_deleted=false&include_archived=true');
   });
 
   it('flags rolling timeline mode as anchor-date required', () => {

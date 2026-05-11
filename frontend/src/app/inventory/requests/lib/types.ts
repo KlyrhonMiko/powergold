@@ -15,6 +15,7 @@ export interface BorrowRecord {
   status: string;
   notes?: string;
   request_date: string;
+  return_at?: string;
   approved_at?: string;
   released_at?: string;
   returned_at?: string;
@@ -44,4 +45,3 @@ export const STATUS_TABS = [
 export type StatusTab = (typeof STATUS_TABS)[number];
 
 export const DEFAULT_PER_PAGE = 10;
-

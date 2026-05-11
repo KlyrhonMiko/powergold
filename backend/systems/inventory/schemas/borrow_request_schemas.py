@@ -102,7 +102,11 @@ class BorrowRequestBatchRead(BaseModel):
 
     borrow_batch_id: str
     batch_id: str
+    item_id: str | None = None
+    item_name: str | None = None
     qty_assigned: int
+    qty_returned: int = 0
+    qty_not_returned: int = 0
     assigned_at: Optional[datetime] = None
     released_at: Optional[datetime] = None
     returned_at: Optional[datetime] = None
@@ -171,9 +175,16 @@ class BorrowRequestUnitReturn(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
 
 
+class BorrowRequestBatchReturn(BaseModel):
+    borrow_batch_id: str = Field(..., max_length=50)
+    qty_returned: int = Field(ge=0)
+
+
 class BorrowRequestReturn(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
     unit_returns: list[BorrowRequestUnitReturn] = Field(default_factory=list)
+    batch_returns: list[BorrowRequestBatchReturn] = Field(default_factory=list)
+
 
 
 class BorrowRequestReopen(BaseModel):
@@ -210,14 +221,19 @@ class ReleaseReceiptItemRead(BaseModel):
     item_id: str
     name: str
     classification: Optional[str] = None
+    is_trackable: bool = False
     qty_released: int
+    qty_returned: int = 0
+    qty_not_returned: int = 0
     serial_numbers: list[str] = []
+    batch_details: list[dict] = []
 
 
 class ReleaseReceiptRead(BaseModel):
     request_id: str
     transaction_ref: str
     receipt_number: str
+    status: str = "released"
     borrower_name: Optional[str] = None
     borrower_user_id: Optional[str] = None
     customer_name: Optional[str] = None
@@ -225,13 +241,15 @@ class ReleaseReceiptRead(BaseModel):
     released_at: Optional[datetime] = None
     released_by_name: Optional[str] = None
     expected_return_at: Optional[datetime] = None
+    returned_at: Optional[datetime] = None
+    returned_by_name: Optional[str] = None
     is_emergency: bool = False
     approval_channel: str = "standard"
     notes: Optional[str] = None
     items: list[ReleaseReceiptItemRead] = []
     borrower_signature: Optional[str] = None
 
-    @field_serializer("released_at", "expected_return_at")
+    @field_serializer("released_at", "expected_return_at", "returned_at")
     def serialize_dates(self, dt: datetime | None) -> str | None:
         return format_datetime(dt)
 

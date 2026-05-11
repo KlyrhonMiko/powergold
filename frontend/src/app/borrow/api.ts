@@ -33,6 +33,7 @@ interface CreateBatchBorrowPayload {
   notes: string;
   customer_name: string;
   location_name: string;
+  return_at?: string;
 }
 
 interface BorrowerLoginPayload {
@@ -109,4 +110,3 @@ export const posApi = {
     }
   },
 };
-
