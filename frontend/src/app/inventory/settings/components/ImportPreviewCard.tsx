@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, type Dispatch, type SetStateAction } from 'react';
 import {
   Upload,
   FileSpreadsheet,
@@ -24,12 +24,10 @@ import {
   useDownloadCorrectedCsv,
   useDownloadTemplate,
   useAcceptRecommended,
-  useSetGroupAction,
   useSetRowAction,
-  useResetActions,
   useIgnoreAllBlockers,
 } from '../lib/useImportExport';
-import type { PreviewSummary, PreviewRow, DuplicateGroup } from '../lib/types';
+import type { PreviewSummary, PreviewRow } from '../lib/types';
 
 type Step = 'upload' | 'review' | 'confirm' | 'done';
 
@@ -70,7 +68,6 @@ function StatusBadge({ status }: { status: string }) {
 function PreviewModal({
   step,
   setStep,
-  previewId,
   setPreviewId,
   summary,
   setSummary,
@@ -91,19 +88,16 @@ function PreviewModal({
   downloadCsvMutation,
   rowsMeta,
   acceptRecommendedMutation,
-  setGroupActionMutation,
   setRowActionMutation,
-  resetActionsMutation,
   ignoreAllBlockersMutation,
   selectedGroupKey,
   setSelectedGroupKey,
 }: {
   step: Step;
   setStep: (s: Step) => void;
-  previewId: string | null;
   setPreviewId: (id: string | null) => void;
   summary: PreviewSummary | null;
-  setSummary: (s: PreviewSummary | null) => void;
+  setSummary: Dispatch<SetStateAction<PreviewSummary | null>>;
   page: number;
   setPage: (p: number) => void;
   perPage: number;
@@ -121,9 +115,7 @@ function PreviewModal({
   downloadCsvMutation: ReturnType<typeof useDownloadCorrectedCsv>;
   rowsMeta: { total: number; limit: number; offset: number } | null | undefined;
   acceptRecommendedMutation: ReturnType<typeof useAcceptRecommended>;
-  setGroupActionMutation: ReturnType<typeof useSetGroupAction>;
   setRowActionMutation: ReturnType<typeof useSetRowAction>;
-  resetActionsMutation: ReturnType<typeof useResetActions>;
   ignoreAllBlockersMutation: ReturnType<typeof useIgnoreAllBlockers>;
   selectedGroupKey: string | null;
   setSelectedGroupKey: (k: string | null) => void;
@@ -649,9 +641,7 @@ export function ImportPreviewCard() {
   const downloadCsvMutation = useDownloadCorrectedCsv(previewId);
   const { downloadTemplate } = useDownloadTemplate();
   const acceptRecommendedMutation = useAcceptRecommended(previewId);
-  const setGroupActionMutation = useSetGroupAction(previewId);
   const setRowActionMutation = useSetRowAction(previewId);
-  const resetActionsMutation = useResetActions(previewId);
   const ignoreAllBlockersMutation = useIgnoreAllBlockers(previewId);
 
   const rows = rowsResponse?.data || [];
@@ -733,7 +723,6 @@ export function ImportPreviewCard() {
         <PreviewModal
           step={step}
           setStep={setStep}
-          previewId={previewId}
           setPreviewId={setPreviewId}
           summary={effectiveSummary}
           setSummary={setSummary}
@@ -754,9 +743,7 @@ export function ImportPreviewCard() {
           downloadCsvMutation={downloadCsvMutation}
           rowsMeta={rowsMeta}
           acceptRecommendedMutation={acceptRecommendedMutation}
-          setGroupActionMutation={setGroupActionMutation}
           setRowActionMutation={setRowActionMutation}
-          resetActionsMutation={resetActionsMutation}
           ignoreAllBlockersMutation={ignoreAllBlockersMutation}
           selectedGroupKey={selectedGroupKey}
           setSelectedGroupKey={setSelectedGroupKey}
