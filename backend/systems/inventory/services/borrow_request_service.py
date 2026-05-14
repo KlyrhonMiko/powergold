@@ -1339,6 +1339,9 @@ class BorrowService(
         )
         data["borrower_uuid"] = borrower.id
 
+        if data.get("return_at") is not None:
+            data["return_at"] = normalize_datetime_to_manila(data["return_at"])
+
         # Clean up remaining fields that shouldn't go into BorrowRequest model
         data.pop("items", None)
 
@@ -1856,7 +1859,9 @@ class BorrowService(
 
         # Calculate returned_on_time
         if db_request.return_at:
-            db_request.returned_on_time = now <= db_request.return_at
+            normalized_return_at = normalize_datetime_to_manila(db_request.return_at)
+            db_request.return_at = normalized_return_at
+            db_request.returned_on_time = now <= normalized_return_at
         else:
             db_request.returned_on_time = True
 
