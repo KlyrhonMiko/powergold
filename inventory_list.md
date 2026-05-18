@@ -1,339 +1,354 @@
 # Inventory List
 
+## INVENTORY LIST (PAPER)
+
+Classification: EQUIPMENT
+
 | Item Name | Quantity |
 |---|---:|
-|INVENTORY LIST (PAPER) | (CLASSIFICATION: EQUIPMENT) |
-| Busbar Screw 3/16 x 1 | 125 pcs | c
-| Busbar Screw 3/16 x 3/4 | 65 pcs | c
-| Cable Tie "10| 1 pack | c
-| Cable Tie "12 | 1 pack | c
-| Cable Tie "6 | 6 packs | c
-| Cable Tie "8 | 3 packs | c
-| Caution Tape | 2 rolls | c
-| Flap Disc | 6 pcs | c
-| Grinding Disc | 2 pcs | c
-| Hacksaw Blade | 50 pcs | c 
-| Leviton Switch | 10 pcs | c
-| Mapp Gas | 10 pcs | c
-| Mica Tube "1 | 20 meters | c
-| Mica Tube "1/2 | 25 meters | c
-| Mica Tube "3/4 | 25 meters | c
-| Panel Push Lock | 95 pcs | c
-| Paint Brush | 1 box | c
-| Polyethylene Tape (Blue) | 2 rolls | c
-| Polyethylene Tape (White) | 12 rolls | c
-| PVC Moulding "1 | 2 pcs | c
-| PVC Moulding "1/2 | 1 pc | c
-| PVC Moulding "3/4 | 3 pcs | c
-| Rubber Tape | 13 pcs | c
-| Sealant (Brown) | 4 pcs  c|
-| Sealant (White) | 7 pcs | c
-| Sealant (Clear) | 20 pcs | c
-| Sealant (Black) | 10 pcs | c
-| Shrinkable Tube (Blue) | 15 meters | c
-| Shrinkable Tube (Green) | 20 meters | c 
-| Shrinkable Tube (Red) | 25 meters | c
-| Shrinkable Tube (Yellow) | 25 meters | c
-| Silver Rod | 60 pcs | c
-| Tex Screw | 50 pcs | c
-| Terminal Lugs "14-10 | 55 pcs | c
-| Terminal Lugs "22-10 | 55 pcs | c
-| Terminal Lugs "38-10 | 30 pcs | c
-| Terminal Lugs "8-10 | 105 pcs | c
-| Spray Paint Black | 2 cans | c
-| Spray Paint Red | 1 can | c
-| Spray Paint Green | 2 cans | c
-| Spray Paint Orange | 1 can | c
-| Spray Paint Brown | 3 cans | c
-| Spray Paint Beige | 2 cans | c
-| Spray Paint Gray | 3 cans | c
-| Powder Soap | 2 sacks | c
-| Neltex | 3 cans | c
-| Flare Nut "1/2 | 24 pcs | c
-| Flare Nut "1/4 | 15 pcs | c
-| Flare Nut "3/4 | 13 pcs | c
-| Flare Nut "3/8 | 26 pcs | c
-| Flare Nut "5/8 | 11 pcs | c
-| Flare Nut "7/8 | 5 pcs | c
-| Electrical Tape (Black) Big | 11 pcs | c
-| Electrical Tape (Blue) Big | 0 | c
-| Electrical Tape (Green) Big | 1 pc | c
-| Electrical Tape (Yellow) Big | 0 | c
-| Electrical Tape (Red) Big | 1 pc | c
-| Electrical Tape (Black) Small | 11 pcs | c
-| Mason Disc | 7 pcs | c
-| Double Sided Tape | 13 pcs | c
-| Aero Tape | 10 pcs | c
-| Aluminum Duct Tape | 2 pcs | c
-| Rubber Insulation 1/2 x 1 | 3 pcs | c
-| Rubber Insulation 1/2 x 1 | 11 pcs | c
-| Rubber Insulation 1/8 x 1 | 14 pcs | c
-| Rubber Insulation 1/4 x 1 | 4 pcs | c
-| Rubber Insulation 1/4 x 1/2 | 16 pcs | c
-| Rubber Insulation 5/8 x 1 | 16 pcs | c
-| Rubber Insulation 3/8 x 1 | 16 pcs | c
-| Rubber Insulation 3/4 x 3/4 | 4 pcs | c
-| Metal Flexible "2 | 20 meters | c
-| Metal Flexible "1 1/2 | 20 meters |c
-| Metal Flexible "1 | 30 meters | c
-| Metal Flexible "3/4 | 35 meters | c
-| Metal Flexible "1/2 | 35 meters | c
-| LQT "2 | 15 meters | c
-| LQT "1 1/2 | 20 meters | c
-| LQT "1 | 20 meters | c
-| LQT "3/4 | 25 meters | c
-| LQT "1/2 | 25 meters | c
-| Amco Box (Unsure) | 15 pcs | c
-| Metal Utility Box | 31 pcs | c
-| Metal Square Box | 28 pcs | c
-| Heavy Utility Box | 16 pcs | c
-| Heavy Duty Plug | 20 pcs | c
-| BJB Socket | 35 pcs | c
-| Porcelain Socket | 40 pcs | c
-| Rocker Switch | 29 pcs | c
-| Toggle Switch | 11 pcs | c
-| LB Conduit | 37 pcs | c
-| Cutting Disc | 31 pcs | c
-| PVC Junction Box | 53 pcs | c
-| PVC Utility Box | 43 pcs | c
-| PVC Square Box | 33 pcs | c 
-| Metal Junction Box | 21 pcs | c
-| Lamp Holder (Side) | 112 pcs | c
-| Lamp Holder (Corner) | 132 pcs | c
-| EMT Coupling "1/2 | 52 pcs | c
-| EMT Coupling "3/4 | 41 pcs | c
-| EMT Coupling "1 | 43 pcs | c
-| EMT Coupling "1 1/2 | 22 pcs | c
-| EMT Coupling "2 | 15 pcs | c
-| EMT Elbow "1/2 | 44 pcs | c
-| EMT Elbow "1/4 | 35 pcs | c
-| EMT Elbow "1 | 21 pcs | c
-| EMT Elbow "1 1/2 | 11 pcs | c
-| PVC Adapter 1/2 | 114 pcs | c
-| PVC Adapter 3/4 | 109 pcs | c
-| PVC Adapter 1 1/2 | 45 pcs | c
-| PVC Adapter 2 | 40 pcs | c
-| PVC Elbow 1/2 | 89 pcs | c
-| PVC Elbow 3/4 | 81 pcs | c
-| PVC Elbow 1 1/2| 43 pcs | c
-| PVC Elbow 1 | 32 pcs | c
-| ST Connector 1/2 | 103 pcs | c
-| ST Connector 3/4 | 72 pcs | c
-| ST Connector 1 | 40 pcs | c
-| ST Connector 1 1/2 | 45 pcs | c
-| ST Connector 1 1/4 | 30 pcs | c
-| LQT Connector 1/2 | 95 pcs | c
-| LQT Connector 3/4 | 84 pcs | c
-| LQT Connector 1 1/2 | 63 pcs | c
-| LQT Connector 2 | 55 pcs | c
-| LQT Connector 1 1/4 | 81 pcs | c
-| U-Bolt 1/2 | 60 pcs | c
-| U-Bolt 3/4 | 52 pcs | c
-| U-Bolt 1 1/4 | 73 pcs | c
-| U-Bolt 1 1/2 | 86 pcs | c
-| U-Bolt 1 | 85 pcs | c
-| LQT Connector 1 | 75 pcs | c
-| Metal Clamp 1/2 | 121 pcs | c
-| Metal Clamp 3/4 | 95 pcs | c
-| Metal Clamp 1 | 87 pcs | c
-| Metal Clamp 1/2 | 67 pcs | c
-| Metal Clamp 1 1/4 | 81 pcs | c
-| Metal Clamp 2 | 66 pcs | c
-| U-Bolt 2 | 87 pcs | c
-| Circuit Breaker (IC60N) 40A, 2P | 3 pcs | c
-| Circuit Breaker (IC60N) 32A, 2P | 3 pcs | c
-| Circuit Breaker (IC60N) 20A, 2P | 2 pcs | c
-| Circuit Breaker (IC60N) 40A, 3P | 2 pcs | c
-| Circuit Breaker (IC60N) 32A, 3P | 1 pc | c
-| Circuit Breaker (SASSIN) 20A, 1P | 1 pc | c
-| Circuit Breaker (SASSIN) 20A, 2P | 1 pc | c
-| Circuit Breaker (SASSIN) 32A, 2P | 1 pc | c
-| Circuit Breaker (CHNT) 40A, 2P | 2 pcs | c
-| Circuit Breaker (CHNT) 32A, 2P | 1 pc | c
-| Circuit Breaker (WIN) 32A, 3P | 1 pc | c
-| Circuit Breaker (Mitsubishi) 20A, 2P | 2 pcs | c
-| Circuit Breaker (TXB) 32A, 2P (Unsure) | 1 pc | c
-| Anchor Grip | 43 pcs | c
-| LED Pilot Lights 220V | 7 pcs | c
-| LED Pilot Lights 440V | 12 pcs | c
-| Copper Coupling 3/4 | 64 pcs | c
-| Copper Coupling 7/8 | 23 pcs | c
-| Copper Coupling 5/8 | 15 pcs | c 
-| Copper Coupling 1/2 | 12 pcs | c
-| Copper Elbow 7/8 | 33 pcs | c
-| Copper Elbow 3/4 | 26 pcs | c
-| Copper Elbow 1/2 | 18 pcs | c
-| Tex Screw "1 | 70 pcs | c
-| Cable Gland PG19 | 10 pcs | c
-| Cable Gland PG16 | 18 pcs | c
-| Cable Gland PG29 | 11 pcs | c
-| Circuit Breaker (TQC) 70A, 1P | 1 pc | c
-| Circuit Breaker (TQC) 60A, 1P | 1 pc | c
-| Circuit Breaker (TQC) 30A, 1P | 4 pcs | c
-| Circuit Breaker (TQC) 20A, 1P | 2 pcs | c
-| Circuit Breaker (TQC) 100A, 2P | 1 pc | c
-| Circuit Breaker (TQC) 70A, 2P | 5 pcs | c
-| Circuit Breaker (TQC) 30A, 2P | 4 pcs | c
-| Circuit Breaker (TQC) 40A, 2P | 2 pcs | c
-| Circuit Breaker (TQC) 20A, 2P | 9 pcs | c
-| Circuit Breaker (TQC) 100A, 3P | 1 pcs | c
-| Circuit Breaker (TQC) 50A, 3P | 2 pcs | c
-| Circuit Breaker (TQC) 40A, 3P | 1 pc | c
-| Circuit Breaker (IC60N) 63A, 1P | 2 pcs | c
-| Circuit Breaker (IC60N) 63A, 2P | 1 pc | c
-| Circuit Breaker (IC60N) 50A, 2P | 4 pcs | c
-|UPDATED WAREHOUSE TOOLS (PAPER) | (CLASSIFICATION: EQUIPMENT) |
-| Tin Snip | 13 pcs | c
-| Riveter | 13 pcs | c
-| Claw Hammer | 8 pcs | c
-| Ball Peen Hammer | 3 pcs | c
-| Rubber Mallet | 3 pcs | c
-| Grinder | 8 pcs |  c
-| Pipe Wrench | 7 pcs | c
-| Crowbar | 4 pcs | c
-| Hacksaw | 4 pcs | c
-| Portable Airblower | 10 pcs | c
-| Radela | 8 pcs | c
-| Heat Gun | 6 pcs | c
-| Trouble Light | 7 pcs | c
-| Sealant Gun | 13 pcs | c
-| Lever Bar | 4 pcs | c
-| Bearing Puller | 8 pcs | c
-| L-Square | 6 pcs | c
-| Cement Thrower / Kutsara | 8 pcs | c
-| Allen Wrench | 7 pcs | c
-| Oxy/Acet Outfit | 4 sets | c
-| Knock-Out | 3 sets | c
-| Ladder (Folding) | 4 pcs | c
-| E-Drill | 7 pcs | c
-| Hilti Chipping Gun | 7 units | c
-| Hilti T.E. Drill | 7 units | c
-| Hydraulic Crimper | 3 sets | c
-| Mechanical Clamp | 2 pcs | c
-| Torque Wrench | 1 pc | c
-| Shovel | 5 pcs | c
-| Testo | 3 pcs | c
-| Pick Axe | 2 pcs | c
-| Pipe Bender | 2 pcs | c
-| Flaring Tools | 5 sets | c
-| Socket Wrench | 5 sets | c
-| Nail Gun | 1 unit | c
-| E-Cord | 6 pcs | c
-| Royal Cord | 20 pcs | c 
-| Flat Screw Driver (Big) | 10 pcs | c
-| Philip Screw Driver (Big) | 10 pcs | c
-| Hydraulic Bolt Cutter | 1 pc | c
-| Cable / Bolt Cutter | 2 pcs | c
-| Thermo Gun | 9 pcs | c
-| Torch | 10 pcs | c
-| Double Barrel Torch | 3 pcs | c
-| Strapping Tool | 2 units | c
-| Pin for Scaffolding | 40 pcs | c
-| Vacuum Pump | 6 units | c
-| Pipe Threader | 3 pcs | c
-| Chain Wrench | 1 pc | c
-| Vise Grip | 1 pc | c
-| T-Wrench | 12 pcs | c
-| Thermal Scanner (Fluke) | 2 units | c
-| Portable Vacuum Wet N Dry | 1 unit | c
-| Plastic Hand Brush | 7 pcs | c
-| Squeegee w/ Handle | 6 pcs | c
-| Spatula w/ 2 ft Handle | 4 pcs | c
-| Rubber Gloves | 12 pairs | c
+| Busbar Screw 3/16 x 1 | 125 pcs |
+| Busbar Screw 3/16 x 3/4 | 65 pcs |
+| Cable Tie "10| 1 pack |
+| Cable Tie "12 | 1 pack |
+| Cable Tie "6 | 6 packs |
+| Cable Tie "8 | 3 packs |
+| Caution Tape | 2 rolls |
+| Flap Disc | 6 pcs |
+| Grinding Disc | 2 pcs |
+| Hacksaw Blade | 50 pcs |
+| Leviton Switch | 10 pcs |
+| Mapp Gas | 10 pcs |
+| Mica Tube "1 | 20 meters |
+| Mica Tube "1/2 | 25 meters |
+| Mica Tube "3/4 | 25 meters |
+| Panel Push Lock | 95 pcs |
+| Paint Brush | 1 box |
+| Polyethylene Tape (Blue) | 2 rolls |
+| Polyethylene Tape (White) | 12 rolls |
+| PVC Moulding "1 | 2 pcs |
+| PVC Moulding "1/2 | 1 pc |
+| PVC Moulding "3/4 | 3 pcs |
+| Rubber Tape | 13 pcs |
+| Sealant (Brown) | 4 pcs |
+| Sealant (White) | 7 pcs |
+| Sealant (Clear) | 20 pcs |
+| Sealant (Black) | 10 pcs |
+| Shrinkable Tube (Blue) | 15 meters |
+| Shrinkable Tube (Green) | 20 meters |
+| Shrinkable Tube (Red) | 25 meters |
+| Shrinkable Tube (Yellow) | 25 meters |
+| Silver Rod | 60 pcs |
+| Tex Screw | 50 pcs |
+| Terminal Lugs "14-10 | 55 pcs |
+| Terminal Lugs "22-10 | 55 pcs |
+| Terminal Lugs "38-10 | 30 pcs |
+| Terminal Lugs "8-10 | 105 pcs |
+| Spray Paint Black | 2 cans |
+| Spray Paint Red | 1 can |
+| Spray Paint Green | 2 cans |
+| Spray Paint Orange | 1 can |
+| Spray Paint Brown | 3 cans |
+| Spray Paint Beige | 2 cans |
+| Spray Paint Gray | 3 cans |
+| Powder Soap | 2 sacks |
+| Neltex | 3 cans |
+| Flare Nut "1/2 | 24 pcs |
+| Flare Nut "1/4 | 15 pcs |
+| Flare Nut "3/4 | 13 pcs |
+| Flare Nut "3/8 | 26 pcs |
+| Flare Nut "5/8 | 11 pcs |
+| Flare Nut "7/8 | 5 pcs |
+| Electrical Tape (Black) Big | 11 pcs |
+| Electrical Tape (Blue) Big | 0 |
+| Electrical Tape (Green) Big | 1 pc |
+| Electrical Tape (Yellow) Big | 0 |
+| Electrical Tape (Red) Big | 1 pc |
+| Electrical Tape (Black) Small | 11 pcs |
+| Mason Disc | 7 pcs |
+| Double Sided Tape | 13 pcs |
+| Aero Tape | 10 pcs |
+| Aluminum Duct Tape | 2 pcs |
+| Rubber Insulation 1/2 x 1 | 3 pcs |
+| Rubber Insulation 1/2 x 1 | 11 pcs |
+| Rubber Insulation 1/8 x 1 | 14 pcs |
+| Rubber Insulation 1/4 x 1 | 4 pcs |
+| Rubber Insulation 1/4 x 1/2 | 16 pcs |
+| Rubber Insulation 5/8 x 1 | 16 pcs |
+| Rubber Insulation 3/8 x 1 | 16 pcs |
+| Rubber Insulation 3/4 x 3/4 | 4 pcs |
+| Metal Flexible "2 | 20 meters |
+| Metal Flexible "1 1/2 | 20 meters |
+| Metal Flexible "1 | 30 meters |
+| Metal Flexible "3/4 | 35 meters |
+| Metal Flexible "1/2 | 35 meters |
+| LQT "2 | 15 meters |
+| LQT "1 1/2 | 20 meters |
+| LQT "1 | 20 meters |
+| LQT "3/4 | 25 meters |
+| LQT "1/2 | 25 meters |
+| Amco Box (Unsure) | 15 pcs |
+| Metal Utility Box | 31 pcs |
+| Metal Square Box | 28 pcs |
+| Heavy Utility Box | 16 pcs |
+| Heavy Duty Plug | 20 pcs |
+| BJB Socket | 35 pcs |
+| Porcelain Socket | 40 pcs |
+| Rocker Switch | 29 pcs |
+| Toggle Switch | 11 pcs |
+| LB Conduit | 37 pcs |
+| Cutting Disc | 31 pcs |
+| PVC Junction Box | 53 pcs |
+| PVC Utility Box | 43 pcs |
+| PVC Square Box | 33 pcs |
+| Metal Junction Box | 21 pcs |
+| Lamp Holder (Side) | 112 pcs |
+| Lamp Holder (Corner) | 132 pcs |
+| EMT Coupling "1/2 | 52 pcs |
+| EMT Coupling "3/4 | 41 pcs |
+| EMT Coupling "1 | 43 pcs |
+| EMT Coupling "1 1/2 | 22 pcs |
+| EMT Coupling "2 | 15 pcs |
+| EMT Elbow "1/2 | 44 pcs |
+| EMT Elbow "1/4 | 35 pcs |
+| EMT Elbow "1 | 21 pcs |
+| EMT Elbow "1 1/2 | 11 pcs |
+| PVC Adapter 1/2 | 114 pcs |
+| PVC Adapter 3/4 | 109 pcs |
+| PVC Adapter 1 1/2 | 45 pcs |
+| PVC Adapter 2 | 40 pcs |
+| PVC Elbow 1/2 | 89 pcs |
+| PVC Elbow 3/4 | 81 pcs |
+| PVC Elbow 1 1/2| 43 pcs |
+| PVC Elbow 1 | 32 pcs |
+| ST Connector 1/2 | 103 pcs |
+| ST Connector 3/4 | 72 pcs |
+| ST Connector 1 | 40 pcs |
+| ST Connector 1 1/2 | 45 pcs |
+| ST Connector 1 1/4 | 30 pcs |
+| LQT Connector 1/2 | 95 pcs |
+| LQT Connector 3/4 | 84 pcs |
+| LQT Connector 1 1/2 | 63 pcs |
+| LQT Connector 2 | 55 pcs |
+| LQT Connector 1 1/4 | 81 pcs |
+| U-Bolt 1/2 | 60 pcs |
+| U-Bolt 3/4 | 52 pcs |
+| U-Bolt 1 1/4 | 73 pcs |
+| U-Bolt 1 1/2 | 86 pcs |
+| U-Bolt 1 | 85 pcs |
+| LQT Connector 1 | 75 pcs |
+| Metal Clamp 1/2 | 121 pcs |
+| Metal Clamp 3/4 | 95 pcs |
+| Metal Clamp 1 | 87 pcs |
+| Metal Clamp 1/2 | 67 pcs |
+| Metal Clamp 1 1/4 | 81 pcs |
+| Metal Clamp 2 | 66 pcs |
+| U-Bolt 2 | 87 pcs |
+| Circuit Breaker (IC60N) 40A, 2P | 3 pcs |
+| Circuit Breaker (IC60N) 32A, 2P | 3 pcs |
+| Circuit Breaker (IC60N) 20A, 2P | 2 pcs |
+| Circuit Breaker (IC60N) 40A, 3P | 2 pcs |
+| Circuit Breaker (IC60N) 32A, 3P | 1 pc |
+| Circuit Breaker (SASSIN) 20A, 1P | 1 pc |
+| Circuit Breaker (SASSIN) 20A, 2P | 1 pc |
+| Circuit Breaker (SASSIN) 32A, 2P | 1 pc |
+| Circuit Breaker (CHNT) 40A, 2P | 2 pcs |
+| Circuit Breaker (CHNT) 32A, 2P | 1 pc |
+| Circuit Breaker (WIN) 32A, 3P | 1 pc |
+| Circuit Breaker (Mitsubishi) 20A, 2P | 2 pcs |
+| Circuit Breaker (TXB) 32A, 2P (Unsure) | 1 pc |
+| Anchor Grip | 43 pcs |
+| LED Pilot Lights 220V | 7 pcs |
+| LED Pilot Lights 440V | 12 pcs |
+| Copper Coupling 3/4 | 64 pcs |
+| Copper Coupling 7/8 | 23 pcs |
+| Copper Coupling 5/8 | 15 pcs |
+| Copper Coupling 1/2 | 12 pcs |
+| Copper Elbow 7/8 | 33 pcs |
+| Copper Elbow 3/4 | 26 pcs |
+| Copper Elbow 1/2 | 18 pcs |
+| Tex Screw "1 | 70 pcs |
+| Cable Gland PG19 | 10 pcs |
+| Cable Gland PG16 | 18 pcs |
+| Cable Gland PG29 | 11 pcs |
+| Circuit Breaker (TQC) 70A, 1P | 1 pc |
+| Circuit Breaker (TQC) 60A, 1P | 1 pc |
+| Circuit Breaker (TQC) 30A, 1P | 4 pcs |
+| Circuit Breaker (TQC) 20A, 1P | 2 pcs |
+| Circuit Breaker (TQC) 100A, 2P | 1 pc |
+| Circuit Breaker (TQC) 70A, 2P | 5 pcs |
+| Circuit Breaker (TQC) 30A, 2P | 4 pcs |
+| Circuit Breaker (TQC) 40A, 2P | 2 pcs |
+| Circuit Breaker (TQC) 20A, 2P | 9 pcs |
+| Circuit Breaker (TQC) 100A, 3P | 1 pcs |
+| Circuit Breaker (TQC) 50A, 3P | 2 pcs |
+| Circuit Breaker (TQC) 40A, 3P | 1 pc |
+| Circuit Breaker (IC60N) 63A, 1P | 2 pcs |
+| Circuit Breaker (IC60N) 63A, 2P | 1 pc |
+| Circuit Breaker (IC60N) 50A, 2P | 4 pcs |
+
+## UPDATED WAREHOUSE TOOLS (PAPER)
+
+Classification: EQUIPMENT
+
+| Item Name | Quantity |
+|---|---:|
+| Tin Snip | 13 pcs |
+| Riveter | 13 pcs |
+| Claw Hammer | 8 pcs |
+| Ball Peen Hammer | 3 pcs |
+| Rubber Mallet | 3 pcs |
+| Grinder | 8 pcs |
+| Pipe Wrench | 7 pcs |
+| Crowbar | 4 pcs |
+| Hacksaw | 4 pcs |
+| Portable Airblower | 10 pcs |
+| Radela | 8 pcs |
+| Heat Gun | 6 pcs |
+| Trouble Light | 7 pcs |
+| Sealant Gun | 13 pcs |
+| Lever Bar | 4 pcs |
+| Bearing Puller | 8 pcs |
+| L-Square | 6 pcs |
+| Cement Thrower / Kutsara | 8 pcs |
+| Allen Wrench | 7 pcs |
+| Oxy/Acet Outfit | 4 sets |
+| Knock-Out | 3 sets |
+| Ladder (Folding) | 4 pcs |
+| E-Drill | 7 pcs |
+| Hilti Chipping Gun | 7 units |
+| Hilti T.E. Drill | 7 units |
+| Hydraulic Crimper | 3 sets |
+| Mechanical Clamp | 2 pcs |
+| Torque Wrench | 1 pc |
+| Shovel | 5 pcs |
+| Testo | 3 pcs |
+| Pick Axe | 2 pcs |
+| Pipe Bender | 2 pcs |
+| Flaring Tools | 5 sets |
+| Socket Wrench | 5 sets |
+| Nail Gun | 1 unit |
+| E-Cord | 6 pcs |
+| Royal Cord | 20 pcs |
+| Flat Screw Driver (Big) | 10 pcs |
+| Philip Screw Driver (Big) | 10 pcs |
+| Hydraulic Bolt Cutter | 1 pc |
+| Cable / Bolt Cutter | 2 pcs |
+| Thermo Gun | 9 pcs |
+| Torch | 10 pcs |
+| Double Barrel Torch | 3 pcs |
+| Strapping Tool | 2 units |
+| Pin for Scaffolding | 40 pcs |
+| Vacuum Pump | 6 units |
+| Pipe Threader | 3 pcs |
+| Chain Wrench | 1 pc |
+| Vise Grip | 1 pc |
+| T-Wrench | 12 pcs |
+| Thermal Scanner (Fluke) | 2 units |
+| Portable Vacuum Wet N Dry | 1 unit |
+| Plastic Hand Brush | 7 pcs |
+| Squeegee w/ Handle | 6 pcs |
+| Spatula w/ 2 ft Handle | 4 pcs |
+| Rubber Gloves | 12 pairs |
 | Plastic Drum (Big, Small) | 12 pcs |
-| Hydraulic Pressure Washer | 8 units | c
-| Spatula | 7 pcs | c
-| Portable Pressure Washer | 5 pcs | c
-| Steel Brush | 18 pcs | c
-| Scotch Brite Sponge | 20 pcs | c
-| Paint Brush | 2 pcs | 
-| Pail | 28 pcs | c
-| Pin Straightener | 6 pcs | c
-| Rubber Boots | 9 pairs | c
-| Plastic Brush w/ 5 ft Handle | 1 pc | c
-| Vacuum Cleaner Small / Big | 11 pcs | c 
-| 2-Way Radio | 1 pair | c
-| Air Compressor | 1 unit | c
-| Capacitance Tester | 1 pc | c
-| Digital Manifold Gauge | 1 pc | c
-| Electric Jigsaw Cutter | 1 unit | c
-| Jack Hammer (Hitachi) | 1 unit | c
-| LAN Tester | 3 pcs | c
-| Leak Detector | 1 pc | c
-| Luxmeter | 1 pc | c
-| Manifold Gauge | 1 pc | c
-| Manual Crimper | 1 pc | c
-| Mechanical Bender (3/8, 5/8, 1/2, 3/4) | 7 pcs | c
-| Nitrogen | 8 tanks | c
-| Nitrogen Regulator / Gauge | 1 pc | c
-| Nitrogen Adapter | 9 pc | c
-| Oxygen Gauge / Regulator | 1 pc | c
-| Combination Wrench | 2 sets | c
-| Open Wrench | 0 | 
-| Acetylene | 3 tanks | c
-| Oxygen | 2 tanks | c
-| Tone Tester | 1 pc | c
-| Tube Cutter | 6 pcs | c
-| Portable Ventilator w/ Flexible Duct | 1 unit | c
-| Wireless Grinder | 1 pc | c
-| Wireless E-Drill | 1 pc | c
-| Gato / Bench Vise | 2 pcs | c
-| Helmet (Motor) | 6 pcs | c
-| Safety Helmet / Hard Hat | 31 pcs | c
-| Safety Harness | 11 pcs | c
-| Safety Vest | 6 pcs | c
-| Leather Gloves | 2 pairs | c
-| Rope | 13 pcs | c
-| Flushing Hose | 19 pcs | c
-| Chisel | 13 pcs | c
-| Wire Bender (F) | 2 pcs | c
-| Welding Mask | 3 pcs | c
-| Welding Shades | 2 pcs | c
-| Nozzle Spray Gun (Long, Short) | 3 pcs | c
-| Adjustable Wrench | 10 pcs | c
-| Pipe Wrench | 5 pcs | c
-| Alligator Clip | 12 pc | c
-| Anemometer | 2 pcs | c
-| Augger (Big, Small) | 3 units | c
-| Augger Attachment (Big, Small) | 2 sets | c
-| Cross Bar | 18 pcs | c
-| Flat Form | 6 pcs | c
-| Dynamo Machine | 1 pc | c
-| Fluke Megger Tester | 1 unit | c
-| Fusion Heater | 4 sets | c
-| PPR Cutter | 4 pcs | c
-| Grease Gun | 1 pc | c
-| Hole Saw | 11 pcs | c
-| Kiki (Rasp File) | 4 pcs | c
-| Laser Meter | 2 pcs | c
-| Lona | 5 pcs | c
-| Sledge Hammer (Maso) | 1 pc | c
-| Megger Tester | 6 pcs | c
-| Phase Sequence | 3 pcs | c
-| Push Cart | 2 pcs | c
-| Rain Coat | 4 sets | c
-| RPM Tester | 5 pcs | c
-| Soldering Iron | 3 pcs | c
-| Solder Pump | 1 pc | c
-| Squeegee | 6 pcs | c
-| Submersible Pump | 1 pc | c
-| Wasbag | 6 pcs | c
-| PM Tools | 6 sets | c
-| Spring Bender 3/8, 5/8, 3/4 | 6 pcs | c
-| Digital Weighing Scale | 4 sets | c
-| Weighing Scale | 1 unit | c
-| Sanding Machine | 1 unit | c
-| Speed Cutter | 2 units | c
-| Scaffold Wheels | 8 pcs | c
-| Scaffold Base Jack | 4 pcs | c
-| Electric Woodsaw | 1 unit | c
-| Bareta | 1 pc | c
-| Headlight | 2 pcs | c
-| SCAF Big | 10 pcs | c
-| SCAF Small | 10 pcs | c
-| Crossbar | 18 pcs | c
-| Flat Form | 6 pcs | c
-|INVENTORY LIST (DIGITIZED) | (CLASSIFICATION: MATERIALS) |
+| Hydraulic Pressure Washer | 8 units |
+| Spatula | 7 pcs |
+| Portable Pressure Washer | 5 pcs |
+| Steel Brush | 18 pcs |
+| Scotch Brite Sponge | 20 pcs |
+| Paint Brush | 2 pcs |
+| Pail | 28 pcs |
+| Pin Straightener | 6 pcs |
+| Rubber Boots | 9 pairs |
+| Plastic Brush w/ 5 ft Handle | 1 pc |
+| Vacuum Cleaner Small / Big | 11 pcs |
+| 2-Way Radio | 1 pair |
+| Air Compressor | 1 unit |
+| Capacitance Tester | 1 pc |
+| Digital Manifold Gauge | 1 pc |
+| Electric Jigsaw Cutter | 1 unit |
+| Jack Hammer (Hitachi) | 1 unit |
+| LAN Tester | 3 pcs |
+| Leak Detector | 1 pc |
+| Luxmeter | 1 pc |
+| Manifold Gauge | 1 pc |
+| Manual Crimper | 1 pc |
+| Mechanical Bender (3/8, 5/8, 1/2, 3/4) | 7 pcs |
+| Nitrogen | 8 tanks |
+| Nitrogen Regulator / Gauge | 1 pc |
+| Nitrogen Adapter | 9 pc |
+| Oxygen Gauge / Regulator | 1 pc |
+| Combination Wrench | 2 sets |
+| Open Wrench | 0 |
+| Acetylene | 3 tanks |
+| Oxygen | 2 tanks |
+| Tone Tester | 1 pc |
+| Tube Cutter | 6 pcs |
+| Portable Ventilator w/ Flexible Duct | 1 unit |
+| Wireless Grinder | 1 pc |
+| Wireless E-Drill | 1 pc |
+| Gato / Bench Vise | 2 pcs |
+| Helmet (Motor) | 6 pcs |
+| Safety Helmet / Hard Hat | 31 pcs |
+| Safety Harness | 11 pcs |
+| Safety Vest | 6 pcs |
+| Leather Gloves | 2 pairs |
+| Rope | 13 pcs |
+| Flushing Hose | 19 pcs |
+| Chisel | 13 pcs |
+| Wire Bender (F) | 2 pcs |
+| Welding Mask | 3 pcs |
+| Welding Shades | 2 pcs |
+| Nozzle Spray Gun (Long, Short) | 3 pcs |
+| Adjustable Wrench | 10 pcs |
+| Pipe Wrench | 5 pcs |
+| Alligator Clip | 12 pc |
+| Anemometer | 2 pcs |
+| Augger (Big, Small) | 3 units |
+| Augger Attachment (Big, Small) | 2 sets |
+| Cross Bar | 18 pcs |
+| Flat Form | 6 pcs |
+| Dynamo Machine | 1 pc |
+| Fluke Megger Tester | 1 unit |
+| Fusion Heater | 4 sets |
+| PPR Cutter | 4 pcs |
+| Grease Gun | 1 pc |
+| Hole Saw | 11 pcs |
+| Kiki (Rasp File) | 4 pcs |
+| Laser Meter | 2 pcs |
+| Lona | 5 pcs |
+| Sledge Hammer (Maso) | 1 pc |
+| Megger Tester | 6 pcs |
+| Phase Sequence | 3 pcs |
+| Push Cart | 2 pcs |
+| Rain Coat | 4 sets |
+| RPM Tester | 5 pcs |
+| Soldering Iron | 3 pcs |
+| Solder Pump | 1 pc |
+| Squeegee | 6 pcs |
+| Submersible Pump | 1 pc |
+| Wasbag | 6 pcs |
+| PM Tools | 6 sets |
+| Spring Bender 3/8, 5/8, 3/4 | 6 pcs |
+| Digital Weighing Scale | 4 sets |
+| Weighing Scale | 1 unit |
+| Sanding Machine | 1 unit |
+| Speed Cutter | 2 units |
+| Scaffold Wheels | 8 pcs |
+| Scaffold Base Jack | 4 pcs |
+| Electric Woodsaw | 1 unit |
+| Bareta | 1 pc |
+| Headlight | 2 pcs |
+| SCAF Big | 10 pcs |
+| SCAF Small | 10 pcs |
+| Crossbar | 18 pcs |
+| Flat Form | 6 pcs |
+
+## INVENTORY LIST (DIGITIZED)
+
+Classification: MATERIALS
+
+| Item Name | Quantity |
+|---|---:|
 | Access Valve | 0 |
 | Acetylene | 0 |
 | Acetylene tank | 0 |
