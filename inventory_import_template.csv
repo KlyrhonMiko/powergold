@@ -1,4 +1,0 @@
-name,category,classification,item_type,unit_of_measure,is_trackable,description,condition,quantity,serial_number,expiration_date
-Thermal Scanner (Fluke),items_tools,equipment,electronics,,true,Warehouse scanner,good,1,TS-102938,
-Powder Soap,cmp_pm_acu_pm,consumable,cleaning_supplies,pack,false,Cleaning consumable,good,50.5,,2026-12-01
-Emergency Light,declogging,equipment,tools,,true,Portable emergency light,excellent,1,EL-998877,
