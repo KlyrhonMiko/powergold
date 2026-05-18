@@ -15,6 +15,7 @@ import {
 import { parseSystemDate } from '@/lib/utils';
 import type { BorrowRecord, BorrowAction, StatusTab } from '../lib/types';
 import type { BorrowRequestBatch, BorrowRequestEvent, BorrowRequestUnit } from '../api';
+import { formatQuantity, formatQuantityWithUnit, sumQuantities } from '@/lib/inventoryQuantity';
 
 function StatusBadge({ status, closeReason }: { status: string; closeReason?: string }) {
   const config: Record<string, { bg: string; text: string; icon: ReactNode }> = {
@@ -147,6 +148,9 @@ function ExpandedDetails({
   const assignments = assignmentsMap[record.request_id];
   const isLoadingAssignments = loadingAssignments[record.request_id];
   const hasAssignmentDetails = !!assignments && (assignments.units.length > 0 || assignments.batches.length > 0);
+  const itemMetaById = new Map(
+    record.items.map((item) => [item.item_id, { unitOfMeasure: item.unit_of_measure }]),
+  );
 
   return (
     <tr className="border-b border-border/30">
@@ -179,7 +183,7 @@ function ExpandedDetails({
                           {item.classification || '—'}
                         </td>
                         <td className="px-3 py-2.5 text-right font-semibold text-foreground">
-                          {item.qty_requested}
+                          {formatQuantityWithUnit(item.qty_requested, item.is_trackable ? undefined : item.unit_of_measure)}
                         </td>
                       </tr>
                     ))}
@@ -245,25 +249,30 @@ function ExpandedDetails({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
-                          {assignments.batches.map((batch) => (
-                            <tr key={batch.borrow_batch_id} className="hover:bg-muted/10">
-                              <td className="px-3 py-2.5">
-                                <div className="font-medium text-foreground font-mono">{batch.batch_id}</div>
-                                <div className="text-muted-foreground text-[10px] mt-0.5">
-                                  {[batch.item_id, batch.item_name].filter(Boolean).join(' · ') || 'Untrackable item'}
-                                </div>
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-semibold text-foreground">
-                                {batch.qty_assigned}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-semibold text-emerald-700">
-                                {batch.qty_returned ?? 0}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-semibold text-amber-700">
-                                {batch.qty_not_returned ?? batch.qty_assigned}
-                              </td>
-                            </tr>
-                          ))}
+                          {assignments.batches.map((batch) => {
+                            const itemMeta = batch.item_id ? itemMetaById.get(batch.item_id) : undefined;
+                            const unitOfMeasure = batch.unit_of_measure ?? itemMeta?.unitOfMeasure;
+
+                            return (
+                              <tr key={batch.borrow_batch_id} className="hover:bg-muted/10">
+                                <td className="px-3 py-2.5">
+                                  <div className="font-medium text-foreground font-mono">{batch.batch_id}</div>
+                                  <div className="text-muted-foreground text-[10px] mt-0.5">
+                                    {[batch.item_id, batch.item_name].filter(Boolean).join(' · ') || 'Untrackable item'}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-semibold text-foreground">
+                                  {formatQuantityWithUnit(batch.qty_assigned, unitOfMeasure)}
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-semibold text-emerald-700">
+                                  {formatQuantityWithUnit(batch.qty_returned ?? 0, unitOfMeasure)}
+                                </td>
+                                <td className="px-3 py-2.5 text-right font-semibold text-amber-700">
+                                  {formatQuantityWithUnit(batch.qty_not_returned ?? batch.qty_assigned, unitOfMeasure)}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -475,7 +484,7 @@ export function RequestsTable({
             </tr>
           ) : records.map((record) => {
             const isExpanded = expandedIds.has(record.request_id);
-            const totalQty = record.items.reduce((sum, item) => sum + item.qty_requested, 0);
+            const totalQty = sumQuantities(record.items.map((item) => item.qty_requested));
 
             return (
               <Fragment key={record.request_id}>
@@ -534,7 +543,7 @@ export function RequestsTable({
 
                   <td className="py-3.5 px-4 text-center">
                     <span className="inline-flex items-center justify-center min-w-[1.75rem] h-7 rounded-md bg-muted/50 text-xs font-semibold text-foreground">
-                      {totalQty}
+                      {formatQuantity(totalQty)}
                     </span>
                   </td>
 

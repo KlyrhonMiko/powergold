@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CartItem } from '../lib/types';
 import { formatCategoryLabel } from '../lib/utils';
+import { formatQuantity, formatQuantityWithUnit } from '@/lib/inventoryQuantity';
 import {
   ArrowLeft,
   Package2,
@@ -123,7 +124,7 @@ export function CheckoutView({
               <div className="text-left">
                 <h2 className="text-sm font-semibold">Items Requested</h2>
                 <p className="text-[11px] text-muted-foreground">
-                  {cart.length} {cart[0]?.is_trackable ? 'equipment' : 'material'}{cart.length !== 1 ? 's' : ''} · {totalCartItems} total qty
+                  {cart.length} {cart[0]?.is_trackable ? 'equipment' : 'material'}{cart.length !== 1 ? 's' : ''} · {formatQuantity(totalCartItems)} total qty
                 </p>
               </div>
             </div>
@@ -163,12 +164,12 @@ export function CheckoutView({
                         {' '}&middot; {classificationLabels[item.classification] || formatCategoryLabel(item.classification)}
                       </>
                     )}
-                    {' '}&middot; {item.available_qty} Remaining
+                    {' '}&middot; {formatQuantityWithUnit(item.available_qty, item.unit_of_measure)} Remaining
                   </p>
                 </div>
                 <div className="flex flex-col items-end shrink-0">
                   <p className="text-[10px] lg:text-xs text-muted-foreground font-medium uppercase tracking-wider">Qty</p>
-                  <p className="font-bold text-lg lg:text-xl tabular-nums">{item.cartQty}</p>
+                  <p className="font-bold text-lg lg:text-xl tabular-nums">{formatQuantity(item.cartQty)}</p>
                 </div>
               </div>
             ))}

@@ -1,6 +1,12 @@
 from datetime import datetime
 from typing import Any, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from systems.inventory.quantity import (
+    NonNegativeQuantityDecimal,
+    QuantityDecimal,
+    SignedQuantityDecimal,
+    serialize_quantity,
+)
 from utils.time_utils import format_datetime
 
 class InventoryMovementRead(BaseModel):
@@ -8,7 +14,7 @@ class InventoryMovementRead(BaseModel):
 
     movement_id: str
 
-    qty_change: int
+    qty_change: SignedQuantityDecimal
     movement_type: str
     reason_code: Optional[str] = None
 
@@ -33,8 +39,12 @@ class InventoryMovementRead(BaseModel):
     def serialize_date(self, dt: datetime) -> str:
         return format_datetime(dt)
 
+    @field_serializer("qty_change")
+    def serialize_qty_change(self, value):
+        return serialize_quantity(value)
+
 class InventoryMovementAdjust(BaseModel):
-    qty_change: int = Field(..., allow_inf_nan=False)
+    qty_change: QuantityDecimal
     movement_type: str = Field(..., min_length=1, max_length=50)
     reason_code: Optional[str] = Field(default=None, max_length=50)
     reference_id: Optional[str] = Field(default=None, max_length=50)
@@ -52,8 +62,8 @@ class InventoryMovementReversalRead(BaseModel):
     original_movement_id: str
     reversal_movement_id: str
 
-    original_qty_change: int
-    reversal_qty_change: int
+    original_qty_change: SignedQuantityDecimal
+    reversal_qty_change: SignedQuantityDecimal
 
     reason: str
     reason_code: str | None = None
@@ -63,14 +73,18 @@ class InventoryMovementReversalRead(BaseModel):
     def serialize_date(self, dt: datetime) -> str:
         return format_datetime(dt)
 
+    @field_serializer("original_qty_change", "reversal_qty_change")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)
+
 
 class InventoryMovementReconciliationRead(BaseModel):
     movement_count: int
 
-    ledger_balance: int
-    actual_balance: int
+    ledger_balance: QuantityDecimal
+    actual_balance: QuantityDecimal
 
-    delta: int
+    delta: SignedQuantityDecimal
     is_reconciled: bool
     latest_movement_at: datetime | None = None
 
@@ -80,17 +94,21 @@ class InventoryMovementReconciliationRead(BaseModel):
             return None
         return format_datetime(dt)
 
+    @field_serializer("ledger_balance", "actual_balance", "delta")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)
+
 
 class InventoryMovementSummaryRead(BaseModel):
     movement_count: int
 
-    total_inflow: int
-    total_outflow: int
+    total_inflow: NonNegativeQuantityDecimal
+    total_outflow: SignedQuantityDecimal
 
-    net_change: int
-    by_type: dict[str, int]
+    net_change: SignedQuantityDecimal
+    by_type: dict[str, float | int]
 
-    by_actor_user_id: dict[str, int]
+    by_actor_user_id: dict[str, float | int]
     
     earliest_movement_at: datetime | None = None
     latest_movement_at: datetime | None = None
@@ -100,6 +118,10 @@ class InventoryMovementSummaryRead(BaseModel):
         if dt is None:
             return None
         return format_datetime(dt)
+
+    @field_serializer("total_inflow", "total_outflow", "net_change")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)
 
 
 class InventoryMovementAnomalyRead(BaseModel):

@@ -4,6 +4,7 @@ from typing import Any
 from sqlmodel import Session, select
 from systems.inventory.services.configuration_service import InventoryConfigService
 from systems.admin.models.user import User
+from systems.inventory.quantity import format_quantity
 from utils.logging import get_logger
 from utils.mailing import send_email
 
@@ -55,13 +56,13 @@ class AlertService:
             alert_type = "LOW_STOCK"
             message = (
                 f"Alert: Item '{item.name}' ({item.item_id}) is at {current_pct:.1f}% capacity "
-                f"({balances['available_qty']}/{balances['total_qty']}). Low stock threshold is {low_stock_pct}%."
+                f"({format_quantity(balances['available_qty'])}/{format_quantity(balances['total_qty'])}). Low stock threshold is {low_stock_pct}%."
             )
         elif current_pct >= overstock_pct:
             alert_type = "OVERSTOCK"
             message = (
                 f"Warning: Item '{item.name}' ({item.item_id}) is at {current_pct:.1f}% capacity "
-                f"({balances['available_qty']}/{balances['total_qty']}). Overstock threshold is {overstock_pct}%."
+                f"({format_quantity(balances['available_qty'])}/{format_quantity(balances['total_qty'])}). Overstock threshold is {overstock_pct}%."
             )
 
         if alert_type:

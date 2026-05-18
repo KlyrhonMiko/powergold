@@ -19,6 +19,7 @@ import { ConfirmBorrowActionModal } from './components/ConfirmBorrowActionModal'
 import { ReleaseReceiptModal } from './components/ReleaseReceiptModal';
 import { useInventoryWebSocket } from '@/hooks/useInventoryWebSocket';
 import { logger } from '@/lib/logger';
+import { areQuantitiesEqual, sumQuantities } from '@/lib/inventoryQuantity';
 
 export default function BorrowsPage() {
   useInventoryWebSocket();
@@ -96,11 +97,14 @@ export default function BorrowsPage() {
     const assignments = assignmentsMap[record.request_id];
     if (!assignments) return false;
 
-    const totalRequested = record.items.reduce((sum, item) => sum + item.qty_requested, 0);
+    const totalRequested = sumQuantities(record.items.map((item) => item.qty_requested));
     const totalAssignedUnits = assignments.units.length;
-    const totalAssignedBatches = assignments.batches.reduce((sum: number, b: BorrowRequestBatch) => sum + b.qty_assigned, 0);
+    const totalAssignedBatches = sumQuantities(
+      assignments.batches.map((batch: BorrowRequestBatch) => batch.qty_assigned),
+    );
 
-    return (totalAssignedUnits + totalAssignedBatches) >= totalRequested;
+    return areQuantitiesEqual(totalAssignedUnits + totalAssignedBatches, totalRequested)
+      || (totalAssignedUnits + totalAssignedBatches) > totalRequested;
   }, [assignmentsMap]);
 
   useEffect(() => {

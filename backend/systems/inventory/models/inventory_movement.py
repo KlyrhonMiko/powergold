@@ -1,5 +1,7 @@
+from decimal import Decimal
 from uuid import UUID
 from datetime import datetime
+from sqlalchemy import Column, Numeric
 from sqlmodel import Field
 from core.base_model import BaseModel
 from utils.time_utils import get_now_manila
@@ -19,7 +21,12 @@ class InventoryMovement(BaseModel, table=True):
     )
     
     # How much changed (+5, -2, etc.)
-    qty_change: int = Field(..., ge=-10000, le=10000)
+    qty_change: Decimal = Field(
+        ...,
+        ge=-10000,
+        le=10000,
+        sa_column=Column(Numeric(18, 3), nullable=False),
+    )
     
     # type: "manual_adjustment", "borrow_release", "borrow_return", "procurement"
     movement_type: str = Field(max_length=50)

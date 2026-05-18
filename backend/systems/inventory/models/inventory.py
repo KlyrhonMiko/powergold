@@ -1,6 +1,9 @@
-from sqlalchemy import Index, text
+from decimal import Decimal
+
+from sqlalchemy import Column, Index, Numeric, text
 from sqlmodel import Field
 from core.base_model import BaseModel
+from systems.inventory.quantity import ZERO_QUANTITY
 
 class InventoryItem(BaseModel, table=True):
     __tablename__ = "inventory"
@@ -9,10 +12,19 @@ class InventoryItem(BaseModel, table=True):
 
     name: str = Field(max_length=255)
     category: str | None = Field(default=None, max_length=100)
+    unit_of_measure: str | None = Field(default=None, max_length=50)
 
     # System-managed operational snapshots derived from units/batches.
-    total_qty: int = Field(default=0, ge=0)
-    available_qty: int = Field(default=0, ge=0)
+    total_qty: Decimal = Field(
+        default=ZERO_QUANTITY,
+        ge=0,
+        sa_column=Column(Numeric(18, 3), nullable=False, server_default=text("0")),
+    )
+    available_qty: Decimal = Field(
+        default=ZERO_QUANTITY,
+        ge=0,
+        sa_column=Column(Numeric(18, 3), nullable=False, server_default=text("0")),
+    )
     status: str = Field(default="healthy", max_length=50)
 
     item_type: str | None = Field(default=None, max_length=50)

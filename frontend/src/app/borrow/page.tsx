@@ -19,6 +19,7 @@ import {
 } from './lib/authFlow';
 import { SelectionView } from './components/SelectionView';
 import { CheckoutView } from './components/CheckoutView';
+import { parseQuantityInput } from '@/lib/inventoryQuantity';
 import { formatCategoryLabel } from './lib/utils';
 
 interface BorrowerTaxonomyData {
@@ -109,14 +110,17 @@ export default function BorrowPage() {
   const totalCartItems = cart.reduce((acc, curr) => acc + curr.cartQty, 0);
 
   const addToCart = (item: BorrowCatalogItem) => {
+    const step = item.is_trackable ? 1 : 0.001;
     setCart((prev) => {
       const existing = prev.find((i) => i.item_id === item.item_id);
       if (existing) {
         return prev.map((i) =>
-          i.item_id === item.item_id ? { ...i, cartQty: i.cartQty + 1 } : i,
+          i.item_id === item.item_id
+            ? { ...i, cartQty: parseQuantityInput(String(i.cartQty + step), step) }
+            : i,
         );
       }
-      return [...prev, { ...item, cartQty: 1 }];
+      return [...prev, { ...item, cartQty: step }];
     });
   };
 
@@ -124,7 +128,8 @@ export default function BorrowPage() {
     setCart((prev) =>
       prev.map((i) => {
         if (i.item_id === id) {
-          const newQty = i.cartQty + delta;
+          const step = i.is_trackable ? 1 : 0.001;
+          const newQty = parseQuantityInput(String(i.cartQty + delta * step), 0);
           if (newQty > 0) {
             return { ...i, cartQty: newQty };
           }

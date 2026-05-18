@@ -11,6 +11,7 @@ export interface BorrowCatalogItem {
   is_trackable: boolean;
   item_type?: string;
   classification?: string;
+  unit_of_measure?: string | null;
   description?: string;
   status_condition?: string;
 }

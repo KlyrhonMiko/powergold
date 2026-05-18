@@ -6,6 +6,14 @@ import { parseSystemDate } from '@/lib/utils';
 import { borrowApi, BorrowRequest } from './api';
 import { inventoryApi } from '../items/api';
 import { toast } from 'sonner';
+import {
+  areQuantitiesEqual,
+  formatQuantity,
+  formatQuantityWithUnit,
+  parseQuantityInput,
+  quantizeQuantity,
+  sumQuantities,
+} from '@/lib/inventoryQuantity';
 
 interface UnitSelectionModalProps {
   request: BorrowRequest;
@@ -23,6 +31,7 @@ interface ItemAssignmentData {
   itemId: string;
   name: string;
   qtyRequested: number;
+  unitOfMeasure?: string | null;
   isTrackable: boolean;
   // For trackable
   availableUnits: {
@@ -50,6 +59,7 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
       itemId: item.item_id,
       name: item.name,
       qtyRequested: item.qty_requested,
+      unitOfMeasure: item.unit_of_measure,
       isTrackable: !!item.is_trackable,
       availableUnits: [],
       selectedUnitIds: [],
@@ -114,7 +124,7 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
 
       const isSelected = item.selectedUnitIds.includes(unitId);
       if (!isSelected && item.selectedUnitIds.length >= item.qtyRequested) {
-        toast.error(`Already selected ${item.qtyRequested} units for ${item.name}`);
+        toast.error(`Already selected ${formatQuantity(item.qtyRequested)} units for ${item.name}`);
         return item;
       }
 
@@ -134,15 +144,19 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
       if (!batch) return item;
 
       // Ensure qty doesn't exceed available or requested (requested is more of a validation later)
-      const sanitizedQty = Math.max(0, Math.min(qty, batch.available_qty));
+      const sanitizedQty = quantizeQuantity(Math.max(0, Math.min(qty, batch.available_qty)));
 
-      const otherAssignmentsTotal = item.selectedBatches
-        .filter(b => b.batch_id !== batchId)
-        .reduce((sum, b) => sum + b.qty, 0);
+      const otherAssignmentsTotal = sumQuantities(
+        item.selectedBatches
+          .filter((selectedBatch) => selectedBatch.batch_id !== batchId)
+          .map((selectedBatch) => selectedBatch.qty),
+      );
 
       if (otherAssignmentsTotal + sanitizedQty > item.qtyRequested) {
-        const allowedQty = Math.max(0, item.qtyRequested - otherAssignmentsTotal);
-        toast.error(`Cannot exceed requested quantity (${item.qtyRequested}) for ${item.name}`);
+        const allowedQty = quantizeQuantity(Math.max(0, item.qtyRequested - otherAssignmentsTotal));
+        toast.error(
+          `Cannot exceed requested quantity (${formatQuantityWithUnit(item.qtyRequested, item.unitOfMeasure)}) for ${item.name}`,
+        );
 
         const nextBatches = item.selectedBatches.filter(b => b.batch_id !== batchId);
         if (allowedQty > 0) nextBatches.push({ batch_id: batchId, qty: allowedQty });
@@ -175,9 +189,9 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
       const batches: { batch_id: string; qty: number }[] = [];
       for (const batch of item.availableBatches) {
         if (remaining <= 0) break;
-        const take = Math.min(remaining, batch.available_qty);
+        const take = quantizeQuantity(Math.min(remaining, batch.available_qty));
         batches.push({ batch_id: batch.batch_id, qty: take });
-        remaining -= take;
+        remaining = quantizeQuantity(remaining - take);
       }
       return { ...item, selectedBatches: batches };
     }));
@@ -198,13 +212,15 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
     for (const item of itemsData) {
       if (item.isTrackable) {
         if (item.selectedUnitIds.length < item.qtyRequested) {
-          toast.error(`Please select ${item.qtyRequested} units for ${item.name}`);
+          toast.error(`Please select ${formatQuantity(item.qtyRequested)} units for ${item.name}`);
           return;
         }
       } else {
-        const total = item.selectedBatches.reduce((sum, b) => sum + b.qty, 0);
+        const total = sumQuantities(item.selectedBatches.map((batch) => batch.qty));
         if (total < item.qtyRequested) {
-          toast.error(`Please assign ${item.qtyRequested} total quantity for ${item.name}`);
+          toast.error(
+            `Please assign ${formatQuantityWithUnit(item.qtyRequested, item.unitOfMeasure)} for ${item.name}`,
+          );
           return;
         }
       }
@@ -244,7 +260,7 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
     if (item.isTrackable) {
       return (item.selectedUnitIds.length / item.qtyRequested) * 100;
     }
-    const totalSelected = item.selectedBatches.reduce((sum, b) => sum + b.qty, 0);
+    const totalSelected = sumQuantities(item.selectedBatches.map((batch) => batch.qty));
     return (totalSelected / item.qtyRequested) * 100;
   };
 
@@ -252,8 +268,8 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
     if (item.isTrackable) {
       return item.selectedUnitIds.length === item.qtyRequested;
     }
-    const total = item.selectedBatches.reduce((sum, b) => sum + b.qty, 0);
-    return total === item.qtyRequested;
+    const total = sumQuantities(item.selectedBatches.map((batch) => batch.qty));
+    return areQuantitiesEqual(total, item.qtyRequested);
   });
 
   return (
@@ -296,11 +312,13 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
                     {item.isTrackable ? (
                       <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase tracking-wider">Trackable</span>
                     ) : (
-                      <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded uppercase tracking-wider">Untrackable</span>
+                          <span className="text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded uppercase tracking-wider">Untrackable</span>
 
                     )}
                   </h3>
-                  <p className="text-xs text-muted-foreground font-medium">Requested: <span className="text-foreground">{item.qtyRequested}</span> unit{item.qtyRequested !== 1 ? 's' : ''}</p>
+                  <p className="text-xs text-muted-foreground font-medium">
+                    Requested: <span className="text-foreground">{formatQuantityWithUnit(item.qtyRequested, item.unitOfMeasure)}</span>
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {!item.loading && !item.error && getPercentageSelected(item) < 100 && (
@@ -318,8 +336,8 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
 
                     }`}>
                     {item.isTrackable
-                      ? `${item.selectedUnitIds.length} / ${item.qtyRequested} Selected`
-                      : `${item.selectedBatches.reduce((sum, b) => sum + b.qty, 0)} / ${item.qtyRequested} Allocated`
+                      ? `${item.selectedUnitIds.length} / ${formatQuantity(item.qtyRequested)} Selected`
+                      : `${formatQuantityWithUnit(sumQuantities(item.selectedBatches.map((batch) => batch.qty)), item.unitOfMeasure)} / ${formatQuantityWithUnit(item.qtyRequested, item.unitOfMeasure)} Allocated`
                     }
                   </div>
                 </div>
@@ -401,12 +419,14 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-muted-foreground font-medium">Available: <span className="text-foreground">{batch.available_qty}</span></p>
+                            <p className="text-xs text-muted-foreground font-medium">
+                              Available: <span className="text-foreground">{formatQuantityWithUnit(batch.available_qty, item.unitOfMeasure)}</span>
+                            </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => handleBatchQtyChange(item.itemId, batch.batch_id, qty - 1)}
+                            onClick={() => handleBatchQtyChange(item.itemId, batch.batch_id, qty - 0.001)}
                             className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary hover:bg-muted font-bold transition-colors"
                           >
                             -
@@ -414,11 +434,13 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
                           <input
                             type="number"
                             value={qty}
-                            onChange={(e) => handleBatchQtyChange(item.itemId, batch.batch_id, parseInt(e.target.value) || 0)}
+                            min={0}
+                            step="0.001"
+                            onChange={(e) => handleBatchQtyChange(item.itemId, batch.batch_id, parseQuantityInput(e.target.value, 0))}
                             className="w-16 h-8 text-center bg-transparent border-b-2 border-primary/50 focus:border-primary outline-none text-sm font-bold"
                           />
                           <button
-                            onClick={() => handleBatchQtyChange(item.itemId, batch.batch_id, qty + 1)}
+                            onClick={() => handleBatchQtyChange(item.itemId, batch.batch_id, qty + 0.001)}
                             className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary hover:bg-muted font-bold transition-colors"
                           >
                             +

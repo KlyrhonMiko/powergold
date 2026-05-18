@@ -68,7 +68,7 @@ Classification: EQUIPMENT
 | Double Sided Tape | 13 pcs |
 | Aero Tape | 10 pcs |
 | Aluminum Duct Tape | 2 pcs |
-| Rubber Insulation 1/2 x 1 | 3 pcs |
+| Rubber Insulation 1/4 x 1 | 13 pcs |
 | Rubber Insulation 1/2 x 1 | 11 pcs |
 | Rubber Insulation 1/8 x 1 | 14 pcs |
 | Rubber Insulation 1/4 x 1 | 4 pcs |
@@ -139,7 +139,7 @@ Classification: EQUIPMENT
 | Metal Clamp 1/2 | 121 pcs |
 | Metal Clamp 3/4 | 95 pcs |
 | Metal Clamp 1 | 87 pcs |
-| Metal Clamp 1/2 | 67 pcs |
+| Metal Clamp 1 1/2 | 67 pcs |
 | Metal Clamp 1 1/4 | 81 pcs |
 | Metal Clamp 2 | 66 pcs |
 | U-Bolt 2 | 87 pcs |
@@ -198,7 +198,7 @@ Classification: EQUIPMENT
 | Ball Peen Hammer | 3 pcs |
 | Rubber Mallet | 3 pcs |
 | Grinder | 8 pcs |
-| Pipe Wrench | 7 pcs |
+| Pipe Wrench | 12 pcs |
 | Crowbar | 4 pcs |
 | Hacksaw | 4 pcs |
 | Portable Airblower | 10 pcs |
@@ -300,7 +300,6 @@ Classification: EQUIPMENT
 | Welding Shades | 2 pcs |
 | Nozzle Spray Gun (Long, Short) | 3 pcs |
 | Adjustable Wrench | 10 pcs |
-| Pipe Wrench | 5 pcs |
 | Alligator Clip | 12 pc |
 | Anemometer | 2 pcs |
 | Augger (Big, Small) | 3 units |
@@ -340,8 +339,6 @@ Classification: EQUIPMENT
 | Headlight | 2 pcs |
 | SCAF Big | 10 pcs |
 | SCAF Small | 10 pcs |
-| Crossbar | 18 pcs |
-| Flat Form | 6 pcs |
 
 ## INVENTORY LIST (DIGITIZED)
 
@@ -350,13 +347,11 @@ Classification: MATERIALS
 | Item Name | Quantity |
 |---|---:|
 | Access Valve | 0 |
-| Acetylene | 0 |
 | Acetylene tank | 0 |
 | Acoustic Board | 0 |
 | ACU Screw/ Stove Bolt 3/16x1/4 | 0 |
 | Adhesive Tape (Clear)B | 0 |
 | Adhesive Tape (Clear)S | 0 |
-| Aero Tape | 0 |
 | Akari Candle Bulb DL | 0 |
 | Akari Candle Bulb E27 ww | 0 |
 | Amco Box | 0 |
@@ -384,7 +379,6 @@ Classification: MATERIALS
 | BI Union Patente 1 | 0 |
 | Big Lite E-27 ww | 0 |
 | Big Lite MR16 ww 5w | 0 |
-| BJB Socket | 0 |
 | Black Screw 1 | 0 |
 | Black Screw 1 1/2 | 0 |
 | Black Screw 1/2 | 0 |
@@ -413,20 +407,13 @@ Classification: MATERIALS
 | Butt Connector 38mm | 0 |
 | Butt Connector 60mm | 0 |
 | Butt Connector 80mm | 0 |
-| Cable Gland PG16 | 0 |
-| Cable Gland PG29 | 0 |
 | Cable Gland PG68 | 0 |
-| Cable Tie "10 | 0 |
-| Cable Tie "12 | 0 |
-| Cable Tie "6 | 0 |
-| Cable Tie "8 | 0 |
 | Caddy Clamp3/4 | 0 |
 | Candle Bulb e27 4W | 0 |
 | Capacitor Resistor 120 | 0 |
 | Capacitor Resistor 180 | 0 |
 | Capacitor Resistor 82 | 0 |
 | Casco Current Transformers 800s | 0 |
-| Caution Tape | 0 |
 | Circuit Breaker ABB 20A 1P | 0 |
 | Circuit Breaker ABB 20A 2P | 0 |
 | Circuit Breaker ABB 25A 1P | 0 |
@@ -574,7 +561,6 @@ Classification: MATERIALS
 | Filter Drier (Small) 1/4 | 0 |
 | Filter Drier (Small) 5/8 | 0 |
 | Fine Thread Screw 1/4x1 3/4 | 0 |
-| Flap Disc | 0 |
 | Flare Nut 1/2 | 0 |
 | Flare Nut 1/4 | 0 |
 | Flare Nut 3/4 | 0 |
@@ -612,7 +598,6 @@ Classification: MATERIALS
 | GI Nipple 3/4x3 | 0 |
 | GI Nipple 3/4x4 | 0 |
 | GI Nipple 3/4x6 | 0 |
-| Grinding Disc | 0 |
 | Hacksaw blade | 0 |
 | Halo MRD 50w | 0 |
 | Hand Tap 5/32 | 0 |
@@ -663,7 +648,6 @@ Classification: MATERIALS
 | PVC Blue Coupling Reducer 1x 3/4 | 0 |
 | PVC Blue Coupling Reducer 1x1/2 | 0 |
 | PVC Blue Coupling Reducer 2x1 | 0 |
-| PVC Blue End Cap 1 | 0 |
 | PVC Blue End Cap 3/4 | 0 |
 | PVC Blue End Cap 1 | 0 |
 | PVC Blue Female 2 | 0 |
@@ -679,11 +663,7 @@ Classification: MATERIALS
 | PVC Conduit Coupling 1/2 Red Orange | 0 |
 | PVC Conduit Coupling 3/4 Red Orange | 0 |
 | PVC Conduit Coupling 2 | 0 |
-| PVC Elbow 1 1/2 | 0 |
-| PVC Elbow 1/2 | 0 |
 | PVC Elbow 2 | 0 |
-| PVC Elbow 3/4 | 0 |
-| PVC Elbow 1 | 0 |
 | PVC Moulding 1 | 0 |
 | PVC Moulding 1/2 | 0 |
 | PVC Moulding 3/4 | 0 |
@@ -723,7 +703,6 @@ Classification: MATERIALS
 | YD 732 18w cyd Panel Lights | 0 |
 | LED Strip Light (ww) 24V | 0 |
 | LED T5, 9W (WW) | 0 |
-| Leviton Switch | 0 |
 | Liquid Soap | 0 |
 | LL Condulet (FS Type 1/2) | 0 |
 | Lock Nut 5/8 | 0 |
@@ -738,7 +717,6 @@ Classification: MATERIALS
 | LQT Straight Connector 1 1/4 | 0 |
 | LQT Straight Connector 1/2 | 0 |
 | LQT Straight Connector 3/4 | 0 |
-| Mapp Gas | 0 |
 | MC Polish | 0 |
 | Mennekes Plug and Socket 16A | 0 |
 | Mennekes Plug and Socket 32A | 0 |
@@ -774,11 +752,9 @@ Classification: MATERIALS
 | Omni E14 WW 4w | 0 |
 | Omni E27 Red 1.5w | 0 |
 | Osram Flourescent ww 3w | 0 |
-| Paint Brush | 0 |
 | Paint Thinner | 0 |
 | Panel Box 2P 20A | 0 |
 | Panel Door Handle | 0 |
-| Panel Push Lock | 0 |
 | PBD 8R 26 Cool White | 0 |
 | Pillow Block Bearing 3 | 0 |
 | Pillow Block Bearing P207 | 0 |
@@ -812,7 +788,6 @@ Classification: MATERIALS
 | PPR Threaded Male Adapter 1 1/4x1 | 0 |
 | PPR Threaded Tee 3/4x1/2 | 0 |
 | PPR Union Pantente 1 | 0 |
-| PPR Union Patente 1 1/2 | 0 |
 | PPR Union Patente 1 1/2 | 0 |
 | PPR Union Patente 3/4 | 0 |
 | Pull Box 4x10x10 | 0 |
@@ -857,19 +832,15 @@ Classification: MATERIALS
 | Rubber Insulation 7/8x1 | 0 |
 | Rubber Insulation 7/8x1/2 | 0 |
 | Rubber Insulation 1 1/8x3/8 | 0 |
-| Rubber Tape | 0 |
 | Rugby | 0 |
 | Sand, Bistay | 0 |
 | Sanitary PVC Elbow 2 | 0 |
 | Sanitary PVC Wye2 | 0 |
-| Sealant (Brown) | 0 |
-| Sealant (Clear) | 0 |
 | Sealant t (Gray) | 0 |
 | Shrinkable Tube (B) | 0 |
 | Shrinkable Tube (G) | 0 |
 | Shrinkable Tube (R) | 0 |
 | Shrinkable Tube (Y) | 0 |
-| Silver Rod | 0 |
 | Slide Type FLTube Holder | 0 |
 | Solenoid Coil | 0 |
 | Solenoid Valve | 0 |
@@ -918,4 +889,3 @@ Classification: MATERIALS
 | Terminal Lugs Crimp (Ring) 60-10 | 0 |
 | Terminal Lugs Crimp (Ring) 8 - 10 | 0 |
 | Terminal Lugs Crimp (Ring) Type 5.5 - 5 | 0 |
-| Tex Screw | 0 |

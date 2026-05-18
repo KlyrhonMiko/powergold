@@ -1,5 +1,7 @@
+from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import Column, Numeric
 from sqlmodel import Field, Relationship
 from typing import TYPE_CHECKING
 
@@ -17,7 +19,10 @@ class BorrowRequestItem(BaseModel, table=True):
     borrow_uuid: UUID | None = Field(default=None, foreign_key="borrow_requests.id", index=True)
     item_uuid: UUID | None = Field(default=None, foreign_key="inventory.id", index=True)
     
-    qty_requested: int = Field(gt=0)
+    qty_requested: Decimal = Field(
+        gt=0,
+        sa_column=Column(Numeric(18, 3), nullable=False),
+    )
 
     # Relationships
     borrow_request: "BorrowRequest" = Relationship(

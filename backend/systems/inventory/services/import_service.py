@@ -12,6 +12,14 @@ from sqlmodel import Session
 from fastapi import UploadFile
 
 from core.config import settings
+from systems.inventory.quantity import (
+    TRACKABLE_UNIT_QUANTITY,
+    ZERO_QUANTITY,
+    format_quantity,
+    parse_quantity,
+    quantize_quantity,
+    require_whole_quantity,
+)
 from systems.inventory.models.inventory import InventoryItem
 from systems.inventory.models.import_history import ImportHistory
 from systems.inventory.services.inventory_service import InventoryService
@@ -25,6 +33,7 @@ ALL_KNOWN_HEADERS = {
     "category",
     "classification",
     "item_type",
+    "unit_of_measure",
     "is_trackable",
     "description",
     "condition",
@@ -121,6 +130,13 @@ class ImportService:
     def __init__(self):
         self.inventory_service = InventoryService()
         self._preview_sessions: dict[str, PreviewSession] = {}
+
+    @staticmethod
+    def _parse_optional_quantity(value: str) -> Any:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        return parse_quantity(text)
 
     def _unwrap_result_value(self, value: Any) -> Any:
         if value is None:
@@ -338,6 +354,7 @@ class ImportService:
         classification = normalized.get("classification", "")
         item_type = normalized.get("item_type", "")
         category = normalized.get("category", "")
+        unit_of_measure = normalized.get("unit_of_measure", "")
 
         if classification and not self.inventory_service.config_service.exists(
             session, classification, "inventory_classification"
@@ -372,9 +389,28 @@ class ImportService:
                     message=f"Category '{category}' is not in the dictionary.",
                 )
             )
+        if unit_of_measure and not self.inventory_service.config_service.exists(
+            session, unit_of_measure, "inventory_unit_of_measure"
+        ):
+            issues.append(
+                RowIssue(
+                    field="unit_of_measure",
+                    code="unknown_unit_of_measure",
+                    severity="warning",
+                    message=f"Unit of measure '{unit_of_measure}' is not in the dictionary.",
+                )
+            )
 
         qty_str = str(normalized.get("quantity", "") or "").strip()
         serial_str = str(normalized.get("serial_number", "") or "").strip()
+        unit_of_measure_str = str(unit_of_measure or "").strip()
+        qty_value = None
+        qty_parse_error = False
+        if qty_str:
+            try:
+                qty_value = self._parse_optional_quantity(qty_str)
+            except ValueError:
+                qty_parse_error = True
 
         expiration_str = str(normalized.get("expiration_date", "") or "").strip()
         if expiration_str:
@@ -420,6 +456,7 @@ class ImportService:
         canonical_cls = self._get_canonical(session, classification, "inventory_classification")
         canonical_type = self._get_canonical(session, item_type, "inventory_item_type")
         canonical_cat = self._get_canonical(session, category, "inventory_category")
+        canonical_uom = self._get_canonical(session, unit_of_measure_str, "inventory_unit_of_measure")
         if name:
             existing_item = self._unwrap_result_value(session.exec(
                 select(InventoryItem).where(
@@ -449,7 +486,27 @@ class ImportService:
             )
             same_serial_in_file = duplicate_in_file_count > 1
 
-        catalog_only = qty_str in {"", "0"} and not serial_str
+        catalog_only = (qty_value is None or qty_value == ZERO_QUANTITY) and not serial_str
+
+        if is_trackable:
+            if unit_of_measure_str:
+                issues.append(
+                    RowIssue(
+                        field="unit_of_measure",
+                        code="unit_of_measure_not_allowed_for_trackable",
+                        severity="error",
+                        message="unit_of_measure must be empty for trackable items.",
+                    )
+                )
+        elif not unit_of_measure_str:
+            issues.append(
+                RowIssue(
+                    field="unit_of_measure",
+                    code="unit_of_measure_required_for_non_trackable",
+                    severity="error",
+                    message="unit_of_measure is required for non-trackable items.",
+                )
+            )
 
         # ================================================================
         # DUPLICATE CLASSIFICATION ENGINE
@@ -466,6 +523,7 @@ class ImportService:
                 existing_cat = getattr(existing_item, 'category', None)
                 existing_cls = getattr(existing_item, 'classification', None)
                 existing_typ = getattr(existing_item, 'item_type', None)
+                existing_uom = getattr(existing_item, 'unit_of_measure', None)
 
                 has_conflict = False
                 if canonical_cat and canonical_cat != (existing_cat or ""):
@@ -473,6 +531,8 @@ class ImportService:
                 if canonical_cls and canonical_cls != (existing_cls or ""):
                     has_conflict = True
                 if canonical_type and canonical_type != (existing_typ or ""):
+                    has_conflict = True
+                if canonical_uom and canonical_uom != (existing_uom or ""):
                     has_conflict = True
 
                 if has_conflict:
@@ -484,7 +544,7 @@ class ImportService:
                     issues.append(RowIssue(
                         field="name", code="conflicting_item_update",
                         severity="error",
-                        message=f"Item '{name}' already exists with different classification/type/category. Review required.",
+                        message=f"Item '{name}' already exists with different classification/type/category/unit_of_measure. Review required.",
                     ))
                 else:
                     duplicate_subtype = "exact_match"
@@ -557,16 +617,58 @@ class ImportService:
                     stock_interpretation = f"Will create item + 1 unit (serial: {serial_str})."
                 status = RowStatus.READY
 
-            if qty_str and qty_str != "0" and qty_str != "1":
-                issues.append(RowIssue(
-                    field="quantity", code="quantity_ignored_for_trackable",
-                    severity="warning",
-                    message="Quantity is ignored for trackable items (each row = 1 unit).",
-                ))
+            if qty_str:
+                if qty_parse_error:
+                    issues.append(RowIssue(
+                        field="quantity", code="invalid_trackable_quantity",
+                        severity="error",
+                        message=f"Invalid quantity: '{qty_str}'. Trackable quantities must be blank or whole numbers.",
+                    ))
+                else:
+                    try:
+                        require_whole_quantity(qty_value, field_name="quantity")
+                    except ValueError:
+                        issues.append(RowIssue(
+                            field="quantity", code="fractional_quantity_not_allowed_for_trackable",
+                            severity="error",
+                            message="Trackable rows cannot use fractional quantity values.",
+                        ))
+                    if qty_value not in (ZERO_QUANTITY, TRACKABLE_UNIT_QUANTITY):
+                        issues.append(RowIssue(
+                            field="quantity", code="quantity_ignored_for_trackable",
+                            severity="warning",
+                            message="Quantity is ignored for trackable items (each row = 1 unit).",
+                        ))
 
         else:
             # --- non-trackable / batch rows ---
-            if not qty_str:
+            if catalog_only:
+                if existing_item and existing_item.unit_of_measure not in (None, canonical_uom):
+                    duplicate_type = "existing_item"
+                    duplicate_subtype = "conflicting_change"
+                    recommended_action = "manual_review"
+                    requires_user_decision = True
+                    status = RowStatus.ERROR
+                    stock_interpretation = "Item exists with different unit of measure — needs review."
+                    issues.append(RowIssue(
+                        field="unit_of_measure",
+                        code="conflicting_unit_of_measure",
+                        severity="error",
+                        message=f"Item '{name}' already exists with a different unit_of_measure.",
+                    ))
+                elif existing_item:
+                    duplicate_type = "existing_item"
+                    duplicate_subtype = "exact_match"
+                    recommended_action = "ignore"
+                    stock_interpretation = "Item already exists; no changes needed."
+                    status = RowStatus.INFO
+                else:
+                    duplicate_type = "none"
+                    recommended_action = "create"
+                    action = ImportAction.CREATE_ITEM_ONLY
+                    stock_interpretation = "Will create item record only (no stock)."
+                    status = RowStatus.INFO
+            elif not qty_str:
                 issues.append(RowIssue(
                     field="quantity", code="quantity_required_for_non_trackable",
                     severity="error",
@@ -580,10 +682,12 @@ class ImportService:
                 requires_user_decision = True
             else:
                 try:
-                    qty = int(qty_str)
+                    if qty_parse_error:
+                        raise ValueError
+                    qty = qty_value
                     if qty <= 0:
                         issues.append(RowIssue(
-                            field="quantity", code="quantity_must_be_positive_integer",
+                            field="quantity", code="quantity_must_be_positive_decimal",
                             severity="error",
                             message="Quantity must be greater than 0.",
                         ))
@@ -595,25 +699,41 @@ class ImportService:
                         requires_user_decision = True
                     else:
                         if existing_item:
-                            duplicate_type = "existing_item"
-                            duplicate_subtype = "ambiguous_stock"
-                            group_key = f"item:{name}|{canonical_cls}|{canonical_type}"
-                            target_match_summary = f"Item '{name}' already exists."
-                            recommended_action = "append_stock"
-                            action = ImportAction.APPEND_STOCK
-                            stock_interpretation = f"Will add {qty} units of stock to existing item."
-                            status = RowStatus.READY
+                            if existing_item.unit_of_measure not in (None, canonical_uom):
+                                duplicate_type = "existing_item"
+                                duplicate_subtype = "conflicting_change"
+                                group_key = f"item:{name}|{canonical_cls}|{canonical_type}"
+                                target_match_summary = f"Item '{name}' already exists."
+                                recommended_action = "manual_review"
+                                requires_user_decision = True
+                                stock_interpretation = "Item exists with different unit of measure — needs review."
+                                status = RowStatus.ERROR
+                                issues.append(RowIssue(
+                                    field="unit_of_measure",
+                                    code="conflicting_unit_of_measure",
+                                    severity="error",
+                                    message=f"Item '{name}' already exists with a different unit_of_measure.",
+                                ))
+                            else:
+                                duplicate_type = "existing_item"
+                                duplicate_subtype = "ambiguous_stock"
+                                group_key = f"item:{name}|{canonical_cls}|{canonical_type}"
+                                target_match_summary = f"Item '{name}' already exists."
+                                recommended_action = "append_stock"
+                                action = ImportAction.APPEND_STOCK
+                                stock_interpretation = f"Will add {format_quantity(qty)} units of stock to existing item."
+                                status = RowStatus.READY
                         else:
                             duplicate_type = "none"
                             recommended_action = "create"
                             action = ImportAction.CREATE_ITEM_AND_BATCH
-                            stock_interpretation = f"Will create item + batch of {qty}."
+                            stock_interpretation = f"Will create item + batch of {format_quantity(qty)}."
                             status = RowStatus.READY
                 except ValueError:
                     issues.append(RowIssue(
-                        field="quantity", code="quantity_must_be_positive_integer",
+                        field="quantity", code="quantity_must_be_positive_decimal",
                         severity="error",
-                        message=f"Invalid quantity: '{qty_str}'. Must be a positive integer.",
+                        message=f"Invalid quantity: '{qty_str}'. Must be a positive number with up to 3 decimal places.",
                     ))
                     action = None
                     stock_interpretation = "Cannot import: invalid quantity."
@@ -1132,8 +1252,9 @@ class ImportService:
 
                     qty_value = str(row.get("quantity") or "").strip()
                     serial_value = str(row.get("serial_number") or "").strip()
+                    parsed_qty = self._parse_optional_quantity(qty_value) if qty_value else None
 
-                    if qty_value in {"", "0"} and not serial_value:
+                    if (parsed_qty is None or parsed_qty == ZERO_QUANTITY) and not serial_value:
                         pass
                     elif is_trackable:
                         self._handle_unit_import(session, item, row, mode, actor_id)
@@ -1190,6 +1311,7 @@ class ImportService:
         canonical_cls = self._get_canonical(session, classification, "inventory_classification") or None
         canonical_type = self._get_canonical(session, item_type, "inventory_item_type") or None
         canonical_cat = self._get_canonical(session, row.get("category", ""), "inventory_category") or None
+        canonical_uom = self._get_canonical(session, row.get("unit_of_measure", ""), "inventory_unit_of_measure") or None
 
         item = self._unwrap_result_value(session.exec(
             select(InventoryItem).where(
@@ -1206,12 +1328,15 @@ class ImportService:
                 category=canonical_cat,
                 item_type=canonical_type,
                 classification=canonical_cls,
+                unit_of_measure=canonical_uom,
                 is_trackable=self._parse_bool(row.get("is_trackable", "false")),
             )
             item = self.inventory_service.create(session, create_data, prefix="ITEM", actor_id=actor_id)
         else:
             if canonical_cat:
                 item.category = canonical_cat
+            if canonical_uom and not item.is_trackable:
+                item.unit_of_measure = canonical_uom
             session.add(item)
 
         if serial_str:
@@ -1248,6 +1373,7 @@ class ImportService:
         canonical_cls = self._get_canonical(session, classification, "inventory_classification") or None
         canonical_type = self._get_canonical(session, item_type, "inventory_item_type") or None
         canonical_cat = self._get_canonical(session, row.get("category", ""), "inventory_category") or None
+        canonical_uom = self._get_canonical(session, row.get("unit_of_measure", ""), "inventory_unit_of_measure") or None
 
         item = self._unwrap_result_value(session.exec(
             select(InventoryItem).where(
@@ -1264,14 +1390,20 @@ class ImportService:
                 category=canonical_cat,
                 item_type=canonical_type,
                 classification=canonical_cls,
+                unit_of_measure=canonical_uom,
                 is_trackable=self._parse_bool(row.get("is_trackable", "false")),
             )
             item = self.inventory_service.create(session, create_data, prefix="ITEM", actor_id=actor_id)
+        elif canonical_uom and not item.is_trackable and item.unit_of_measure is None:
+            item.unit_of_measure = canonical_uom
+            session.add(item)
 
         qty_value = str(row.get("quantity") or "").strip()
         serial_value = str(row.get("serial_number") or "").strip()
 
-        if qty_value in {"", "0"} and not serial_value:
+        parsed_qty = self._parse_optional_quantity(qty_value) if qty_value else None
+
+        if (parsed_qty is None or parsed_qty == ZERO_QUANTITY) and not serial_value:
             return
         elif is_trackable:
             serial = serial_value
@@ -1298,14 +1430,9 @@ class ImportService:
                     actor_id=actor_id,
                 )
         else:
-            qty_str = row.get("quantity")
-            if not qty_str:
+            if parsed_qty is None:
                 return
-            try:
-                qty = int(qty_str)
-                if qty <= 0:
-                    return
-            except ValueError:
+            if parsed_qty <= 0:
                 return
             expiry = None
             expiry_str = str(row.get("expiration_date") or "").strip()
@@ -1325,7 +1452,7 @@ class ImportService:
             self.inventory_service.adjust_stock(
                 session=session,
                 item_id=item.item_id,
-                qty_change=qty,
+                qty_change=parsed_qty,
                 movement_type="procurement",
                 reason_code="procurement_correction",
                 note="Initial stock set via CSV import",
@@ -1351,6 +1478,7 @@ class ImportService:
         canonical_item_type = self._get_canonical(session, item_type, "inventory_item_type") or None
         canonical_classification = self._get_canonical(session, classification, "inventory_classification") or None
         canonical_category = self._get_canonical(session, row.get("category", ""), "inventory_category") or None
+        canonical_uom = self._get_canonical(session, row.get("unit_of_measure", ""), "inventory_unit_of_measure") or None
 
         statement = select(InventoryItem).where(
             InventoryItem.name == name,
@@ -1366,11 +1494,14 @@ class ImportService:
                 category=canonical_category,
                 item_type=canonical_item_type,
                 classification=canonical_classification,
+                unit_of_measure=canonical_uom,
                 is_trackable=self._parse_bool(row.get("is_trackable", "false")),
             )
             item = self.inventory_service.create(session, create_data, prefix="ITEM", actor_id=actor_id)
         elif mode == "overwrite":
             item.category = canonical_category or item.category
+            if canonical_uom and not item.is_trackable:
+                item.unit_of_measure = canonical_uom
             session.add(item)
 
         return item
@@ -1379,6 +1510,11 @@ class ImportService:
         serial = row.get("serial_number")
         if not serial:
             raise ValueError("serial_number is required for trackable items")
+
+        qty_str = str(row.get("quantity") or "").strip()
+        if qty_str:
+            qty = parse_quantity(qty_str)
+            require_whole_quantity(qty, field_name="quantity")
 
         from systems.inventory.models.inventory_unit import InventoryUnit
         existing_unit = self._unwrap_result_value(session.exec(select(InventoryUnit).where(InventoryUnit.serial_number == serial)).first())
@@ -1416,12 +1552,9 @@ class ImportService:
         if not qty_str:
             raise ValueError("quantity is required for non-trackable items")
 
-        try:
-            qty = int(qty_str)
-            if qty <= 0:
-                raise ValueError("quantity must be greater than 0")
-        except ValueError:
-            raise ValueError(f"Invalid quantity: {qty_str}")
+        qty = parse_quantity(qty_str)
+        if qty <= 0:
+            raise ValueError("quantity must be greater than 0")
 
         expiry = None
         if expiry_str:
@@ -1454,11 +1587,13 @@ class ImportService:
         cat = (row.get("category") or "").strip()
         cls = (row.get("classification") or "").strip()
         typ = (row.get("item_type") or "").strip()
+        uom = (row.get("unit_of_measure") or "").strip()
 
         mapping = {
             "item_type": "inventory_item_type",
             "classification": "inventory_classification",
             "category": "inventory_category",
+            "unit_of_measure": "inventory_unit_of_measure",
         }
 
         def is_valid(val, category):
@@ -1466,10 +1601,15 @@ class ImportService:
                 return True
             return self.inventory_service.config_service.exists(session, val, category)
 
-        if is_valid(cat, mapping["category"]) and is_valid(cls, mapping["classification"]) and is_valid(typ, mapping["item_type"]):
+        if (
+            is_valid(cat, mapping["category"])
+            and is_valid(cls, mapping["classification"])
+            and is_valid(typ, mapping["item_type"])
+            and is_valid(uom, mapping["unit_of_measure"])
+        ):
             return
 
-        all_vals = [cat, cls, typ]
+        all_vals = [cat, cls, typ, uom]
         results = {}
         for field, category in mapping.items():
             results[field] = None
@@ -1484,16 +1624,20 @@ class ImportService:
             row["classification"] = results["classification"]
         if results.get("category"):
             row["category"] = results["category"]
+        if results.get("unit_of_measure"):
+            row["unit_of_measure"] = results["unit_of_measure"]
 
     def _rescue_mapping_preview(self, session: Session, row: dict) -> list[RowIssue]:
         cat_before = (row.get("category") or "").strip()
         cls_before = (row.get("classification") or "").strip()
         typ_before = (row.get("item_type") or "").strip()
+        uom_before = (row.get("unit_of_measure") or "").strip()
 
         mapping = {
             "item_type": "inventory_item_type",
             "classification": "inventory_classification",
             "category": "inventory_category",
+            "unit_of_measure": "inventory_unit_of_measure",
         }
 
         def is_valid(val, category):
@@ -1501,10 +1645,15 @@ class ImportService:
                 return True
             return self.inventory_service.config_service.exists(session, val, category)
 
-        if is_valid(cat_before, mapping["category"]) and is_valid(cls_before, mapping["classification"]) and is_valid(typ_before, mapping["item_type"]):
+        if (
+            is_valid(cat_before, mapping["category"])
+            and is_valid(cls_before, mapping["classification"])
+            and is_valid(typ_before, mapping["item_type"])
+            and is_valid(uom_before, mapping["unit_of_measure"])
+        ):
             return []
 
-        all_vals = [cat_before, cls_before, typ_before]
+        all_vals = [cat_before, cls_before, typ_before, uom_before]
         results = {}
         for field, category in mapping.items():
             results[field] = None
@@ -1542,6 +1691,16 @@ class ImportService:
                     code="rescued_field_mapping_applied",
                     severity="warning",
                     message=f"'{cat_before}' was moved from category. Corrected to '{results['category']}'.",
+                )
+            )
+        if results.get("unit_of_measure") and results["unit_of_measure"] != uom_before:
+            row["unit_of_measure"] = results["unit_of_measure"]
+            issues.append(
+                RowIssue(
+                    field="unit_of_measure",
+                    code="rescued_field_mapping_applied",
+                    severity="warning",
+                    message=f"'{uom_before}' was moved from unit_of_measure. Corrected to '{results['unit_of_measure']}'.",
                 )
             )
 

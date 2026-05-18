@@ -10,6 +10,7 @@ export interface BorrowRecord {
     qty_requested: number;
     classification?: string;
     item_type?: string;
+    unit_of_measure?: string | null;
     is_trackable?: boolean;
   }>;
   status: string;

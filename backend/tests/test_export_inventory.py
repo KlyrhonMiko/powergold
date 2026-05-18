@@ -121,6 +121,7 @@ def _seed_export_fixture_data(session: Session) -> dict[str, str]:
         category="supplies",
         classification="materials",
         item_type="consumable",
+        unit_of_measure="can",
         is_trackable=False,
         total_qty=50,
         available_qty=40,
@@ -333,6 +334,7 @@ def test_borrow_history_csv_contains_simplified_rows(
         "Borrower's Name + Employee ID",
         "What they Borrowed",
         "Serial/Batch Number",
+        "Unit of Measure",
         "Quantity",
         "Returned Quantity",
         "Not Returned Quantity",
@@ -345,8 +347,8 @@ def test_borrow_history_csv_contains_simplified_rows(
         "Returned at",
         "Returned by",
     ]
-    assert ["05/01/2026", "REQ-001", "John Doe - EMP-2025-001", "Tracked Camera", "SN/001", "1", "1", "0", "Fully Returned", "returned", "", "N/A", "2026-05-01 10:05:00", "Release Officer - EMP-REL-001", "2026-05-03 15:05:00", "Return Officer - EMP-RET-001"] in rows[1:]
-    assert ["05/01/2026", "REQ-001", "John Doe - EMP-2025-001", "Cleaning Solvent", "BATCH-001", "5", "5", "0", "Fully Returned", "returned", "", "N/A", "2026-05-01 10:10:00", "Release Officer - EMP-REL-001", "2026-05-03 15:10:00", "Return Officer - EMP-RET-001"] in rows[1:]
+    assert ["05/01/2026", "REQ-001", "John Doe - EMP-2025-001", "Tracked Camera", "SN/001", "", "1", "1", "0", "Fully Returned", "returned", "", "N/A", "2026-05-01 10:05:00", "Release Officer - EMP-REL-001", "2026-05-03 15:05:00", "Return Officer - EMP-RET-001"] in rows[1:]
+    assert ["05/01/2026", "REQ-001", "John Doe - EMP-2025-001", "Cleaning Solvent", "BATCH-001", "can", "5", "5", "0", "Fully Returned", "returned", "", "N/A", "2026-05-01 10:10:00", "Release Officer - EMP-REL-001", "2026-05-03 15:10:00", "Return Officer - EMP-RET-001"] in rows[1:]
     assert response.headers["Content-Disposition"].startswith("attachment; filename=borrow_request_report-")
 
 
@@ -423,18 +425,15 @@ def test_equipment_history_csv_contains_simplified_rows(
     rows = _parse_csv_response(response)
     assert rows[0] == [
         "Serial Number",
-        "Item Name",
+        "Request ID Reference",
+        "Request Date",
         "Who Borrowed",
-        "Who Released",
-        "When It was Borrowed",
-        "Condition on Release",
-        "When It was Returned",
-        "Who received the return",
-        "Condition on Return",
-        "Return Notes",
-        "Request ID (As a Reference)",
+        "Status on Release",
+        "Released at",
+        "Returned at",
+        "Status on Return",
     ]
-    assert ["SN/001", "Tracked Camera", "John Doe - EMP-2025-001", "Release Officer (EMP-REL-001)", "2026-05-01 10:05:00", "good", "2026-05-03 15:05:00", "Return Officer (EMP-RET-001)", "fair", "Minor scratches observed", "REQ-001"] in rows[1:]
+    assert ["SN/001", "REQ-001", "05/01/2026", "John Doe - EMP-2025-001", "good", "2026-05-01 10:05:00", "2026-05-03 15:05:00", "fair"] in rows[1:]
     assert response.headers["Content-Disposition"].startswith("attachment; filename=equipment_histry_report-")
 
 

@@ -3,14 +3,15 @@ from sqlmodel import Session, select, func
 from systems.inventory.models.inventory import InventoryItem
 from systems.inventory.models.borrow_request import BorrowRequest
 from systems.inventory.models.borrow_request_item import BorrowRequestItem
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from typing import Any
 from systems.inventory.services.inventory_service import InventoryService
+from systems.inventory.quantity import NonNegativeQuantityDecimal, serialize_quantity
 
 
 class DashboardStats(BaseModel):
     total_equipment: int
-    items_borrowed: int
+    items_borrowed: NonNegativeQuantityDecimal
     active_users: int
     low_stock_items: int
 
@@ -23,13 +24,22 @@ class DashboardStats(BaseModel):
     items_in_maintenance: int
     items_with_poor_condition: int
 
+    @field_serializer("items_borrowed")
+    def serialize_items_borrowed(self, value):
+        return serialize_quantity(value)
+
 
 class LowStockItemRead(BaseModel):
     item_id: str
     name: str
     category: str | None = None
-    available_qty: int
-    total_qty: int
+    unit_of_measure: str | None = None
+    available_qty: NonNegativeQuantityDecimal
+    total_qty: NonNegativeQuantityDecimal
+
+    @field_serializer("available_qty", "total_qty")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)
 
 
 class InventoryCategoryBreakdown(BaseModel):
@@ -234,7 +244,7 @@ class DashboardService:
             .order_by(InventoryItem.name.asc())
         ).all()
 
-        low_items: list[tuple[InventoryItem, dict[str, int]]] = []
+        low_items: list[tuple[InventoryItem, dict[str, Any]]] = []
         for item in items:
             balances = inventory_service.get_item_balances(session, item)
             if balances["available_qty"] <= threshold:
@@ -248,6 +258,7 @@ class DashboardService:
                 item_id=i.item_id,
                 name=i.name,
                 category=i.category,
+                unit_of_measure=i.unit_of_measure,
                 available_qty=balances["available_qty"],
                 total_qty=balances["total_qty"],
             )

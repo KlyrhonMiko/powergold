@@ -2,6 +2,7 @@
 
 import { Loader2, Undo2, X, FileText, AlertCircle } from 'lucide-react';
 import type { LedgerMovement } from '../lib/types';
+import { formatQuantity } from '@/lib/inventoryQuantity';
 
 export function ReversalMovementModal({
   open,
@@ -76,7 +77,7 @@ export function ReversalMovementModal({
                   }`}
                 >
                   {selectedMovement.qty_change > 0 ? '+' : ''}
-                  {selectedMovement.qty_change}
+                  {formatQuantity(selectedMovement.qty_change)}
                 </p>
               </div>
               <div className="col-span-2">

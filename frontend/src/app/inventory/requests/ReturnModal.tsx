@@ -8,6 +8,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { formatQuantityWithUnit, parseQuantityInput, quantizeQuantity } from '@/lib/inventoryQuantity';
 
 interface ReturnModalProps {
   request: BorrowRequest;
@@ -27,6 +28,7 @@ interface BatchReturnState {
   batch_id: string;
   item_id?: string;
   item_name?: string;
+  unit_of_measure?: string | null;
   qty_assigned: number;
   qty_returned: number;
 }
@@ -83,6 +85,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
           batch_id: batch.batch_id,
           item_id: batch.item_id,
           item_name: batch.item_name,
+          unit_of_measure: batch.unit_of_measure ?? request.items.find((item) => item.item_id === batch.item_id)?.unit_of_measure,
           qty_assigned: batch.qty_assigned,
           qty_returned: batch.qty_not_returned ?? batch.qty_assigned,
         })));
@@ -105,7 +108,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
   const updateBatchReturn = (borrowBatchId: string, value: number) => {
     setBatchReturns(prev => prev.map(batch =>
       batch.borrow_batch_id === borrowBatchId
-        ? { ...batch, qty_returned: Math.max(0, Math.min(batch.qty_assigned, value)) }
+        ? { ...batch, qty_returned: quantizeQuantity(Math.max(0, Math.min(batch.qty_assigned, value))) }
         : batch
     ));
   };
@@ -336,7 +339,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
 
                   <div className="space-y-3">
                     {batchReturns.map((batchReturn) => {
-                      const qtyNotReturned = Math.max(batchReturn.qty_assigned - batchReturn.qty_returned, 0);
+                      const qtyNotReturned = quantizeQuantity(Math.max(batchReturn.qty_assigned - batchReturn.qty_returned, 0));
 
                       return (
                         <div
@@ -358,8 +361,8 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                               )}
                             </div>
                             <div className="text-right text-xs font-medium text-muted-foreground">
-                              <p>Assigned: <span className="text-foreground font-bold">{batchReturn.qty_assigned}</span></p>
-                              <p>Not returned: <span className="text-foreground font-bold">{qtyNotReturned}</span></p>
+                              <p>Assigned: <span className="text-foreground font-bold">{formatQuantityWithUnit(batchReturn.qty_assigned, batchReturn.unit_of_measure)}</span></p>
+                              <p>Not returned: <span className="text-foreground font-bold">{formatQuantityWithUnit(qtyNotReturned, batchReturn.unit_of_measure)}</span></p>
                             </div>
                           </div>
 
@@ -371,8 +374,9 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                               type="number"
                               min={0}
                               max={batchReturn.qty_assigned}
+                              step="0.001"
                               value={batchReturn.qty_returned}
-                              onChange={(e) => updateBatchReturn(batchReturn.borrow_batch_id, Number(e.target.value) || 0)}
+                              onChange={(e) => updateBatchReturn(batchReturn.borrow_batch_id, parseQuantityInput(e.target.value, 0))}
                               className="h-10 w-28 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-sm font-bold"
                             />
                             <button

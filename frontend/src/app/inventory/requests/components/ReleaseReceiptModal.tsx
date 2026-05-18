@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { borrowApi, type ReleaseReceipt } from '../api';
 import { parseSystemDate } from '@/lib/utils';
+import { formatQuantity, formatQuantityWithUnit } from '@/lib/inventoryQuantity';
 
 function fmtDate(dateStr?: string) {
   if (!dateStr) return '';
@@ -66,14 +67,14 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
         <div style="${s.bold}">${item.name}</div>
         ${item.serial_numbers.length > 0 ? `<div style="font-size: 9px; color: #555;">S/N: ${item.serial_numbers.join(', ')}</div>` : ''}
       </td>
-      <td style="${s.td} text-align: right; ${s.bold} width: 30px;">${item.qty_released}</td>
+      <td style="${s.td} text-align: right; ${s.bold} width: 48px;">${formatQuantityWithUnit(item.qty_released, item.is_trackable ? undefined : item.unit_of_measure)}</td>
     </tr>`).join('');
 
   const returnSummary = receipt.items.map((item) => {
     const batchLines = (item.batch_details ?? []).map((batch) => `
       <div style="padding-left: 8px; font-size: 9px; color: #555; display: flex; justify-content: space-between; gap: 8px;">
         <span>${batch.batch_id}</span>
-        <span>Rel: ${batch.qty_released} | Ret: ${batch.qty_returned} | Not Ret: ${batch.qty_not_returned}</span>
+        <span>Rel: ${formatQuantityWithUnit(batch.qty_released, item.is_trackable ? undefined : item.unit_of_measure)} | Ret: ${formatQuantityWithUnit(batch.qty_returned, item.is_trackable ? undefined : item.unit_of_measure)} | Not Ret: ${formatQuantityWithUnit(batch.qty_not_returned, item.is_trackable ? undefined : item.unit_of_measure)}</span>
       </div>
     `).join('');
 
@@ -81,7 +82,7 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
       <div style="padding: 4px 0; border-bottom: 1px dotted #999;">
         <div style="display: flex; justify-content: space-between; gap: 8px;">
           <span style="${s.bold}">${item.name}</span>
-          <span style="font-size: 10px;">Ret: ${item.qty_returned ?? 0} | Not Ret: ${item.qty_not_returned ?? item.qty_released}</span>
+          <span style="font-size: 10px;">Ret: ${formatQuantityWithUnit(item.qty_returned ?? 0, item.is_trackable ? undefined : item.unit_of_measure)} | Not Ret: ${formatQuantityWithUnit(item.qty_not_returned ?? item.qty_released, item.is_trackable ? undefined : item.unit_of_measure)}</span>
         </div>
         ${batchLines}
       </div>
@@ -129,14 +130,14 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
         <tr>
           <th style="${s.th} text-align: center; width: 18px;">#</th>
           <th style="${s.th} text-align: left; padding-left: 4px;">Description</th>
-          <th style="${s.th} text-align: right; width: 30px;">Qty</th>
+          <th style="${s.th} text-align: right; width: 48px;">Qty</th>
         </tr>
       </thead>
       <tbody>${items}</tbody>
       <tfoot>
         <tr>
           <td colspan="2" style="padding: 4px 0; ${s.bold} text-align: right; font-size: 11px; border-top: 1px solid #000;">TOTAL</td>
-          <td style="padding: 4px 0; ${s.bold} text-align: right; font-size: 13px; border-top: 1px solid #000;">${total}</td>
+          <td style="padding: 4px 0; ${s.bold} text-align: right; font-size: 13px; border-top: 1px solid #000;">${formatQuantity(total)}</td>
         </tr>
       </tfoot>
     </table>

@@ -1,8 +1,17 @@
 import type { LowStockItem } from '../lib/types';
 import Link from 'next/link';
 import { AlertTriangle, ArrowRight, PackageCheck } from 'lucide-react';
+import { formatQuantityWithUnit } from '@/lib/inventoryQuantity';
 
-function StockBar({ available, total }: { available: number; total: number }) {
+function StockBar({
+  available,
+  total,
+  unitOfMeasure,
+}: {
+  available: number;
+  total: number;
+  unitOfMeasure?: string | null;
+}) {
   const pct = total > 0 ? Math.round((available / total) * 100) : 0;
   const color =
     pct === 0
@@ -16,7 +25,7 @@ function StockBar({ available, total }: { available: number; total: number }) {
         <div className={`h-full rounded-full ${color} transition-all`} style={{ width: `${pct}%` }} />
       </div>
       <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
-        {available}/{total}
+        {formatQuantityWithUnit(available, unitOfMeasure)}/{formatQuantityWithUnit(total, unitOfMeasure)}
       </span>
     </div>
   );
@@ -74,7 +83,11 @@ export function LowStockPanel({
                   <span className="text-[11px] text-muted-foreground shrink-0 ml-2">{item.category}</span>
                 )}
               </div>
-              <StockBar available={item.available_qty} total={item.total_qty} />
+              <StockBar
+                available={item.available_qty}
+                total={item.total_qty}
+                unitOfMeasure={item.unit_of_measure}
+              />
             </div>
           ))}
         </div>

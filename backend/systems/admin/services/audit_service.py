@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
 from sqlmodel import Session, select, desc, func
@@ -40,6 +41,35 @@ class AuditService(BaseService[AuditLog, Any, Any]):
 
         if isinstance(value, list):
             return [self._redact_sensitive_payload(item, parent_key=parent_key) for item in value]
+
+        return value
+
+    def _json_safe_payload(self, value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: self._json_safe_payload(nested_value)
+                for key, nested_value in value.items()
+            }
+
+        if isinstance(value, list):
+            return [self._json_safe_payload(item) for item in value]
+
+        if isinstance(value, tuple):
+            return [self._json_safe_payload(item) for item in value]
+
+        if isinstance(value, set):
+            return [self._json_safe_payload(item) for item in value]
+
+        if isinstance(value, Decimal):
+            if value == value.to_integral_value():
+                return int(value)
+            return float(value)
+
+        if isinstance(value, datetime):
+            return format_datetime(value)
+
+        if isinstance(value, UUID):
+            return str(value)
 
         return value
 
@@ -197,8 +227,12 @@ class AuditService(BaseService[AuditLog, Any, Any]):
         from utils.id_generator import get_next_sequence
         
         audit_id = get_next_sequence(db, self.model, "audit_id", "AUDIT")
-        sanitized_before = self._redact_sensitive_payload(before)
-        sanitized_after = self._redact_sensitive_payload(after)
+        sanitized_before = self._json_safe_payload(
+            self._redact_sensitive_payload(before)
+        )
+        sanitized_after = self._json_safe_payload(
+            self._redact_sensitive_payload(after)
+        )
         
         log_entry = AuditLog(
             audit_id=audit_id,

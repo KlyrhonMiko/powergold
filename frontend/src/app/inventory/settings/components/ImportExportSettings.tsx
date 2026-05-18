@@ -535,7 +535,11 @@ export function ImportExportSettings() {
                     </li>
                     <li className="flex items-start gap-2">
                       <CheckCircle2 className="w-3.5 h-3.5 text-primary mt-0.5" />
-                      <div><span className="font-bold text-foreground">quantity:</span> Ignored (defaults to 1 unit per serial).</div>
+                      <div><span className="font-bold text-foreground">unit_of_measure:</span> Must be blank.</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-primary mt-0.5" />
+                      <div><span className="font-bold text-foreground">quantity:</span> Optional and ignored, but if provided it must still be a whole number.</div>
                     </li>
                   </ul>
                 </div>
@@ -557,7 +561,11 @@ export function ImportExportSettings() {
                   <ul className="text-xs space-y-2 mt-2">
                     <li className="flex items-start gap-2">
                       <AlertCircle className="w-3.5 h-3.5 text-orange-500 mt-0.5" />
-                      <div><span className="font-bold text-foreground">quantity:</span> Mandatory (must be greater than 0).</div>
+                      <div><span className="font-bold text-foreground">unit_of_measure:</span> Required and must match the inventory unit dictionary.</div>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <AlertCircle className="w-3.5 h-3.5 text-orange-500 mt-0.5" />
+                      <div><span className="font-bold text-foreground">quantity:</span> Mandatory and may include up to 3 decimal places.</div>
                     </li>
                     <li className="flex items-start gap-2">
                       <AlertCircle className="w-3.5 h-3.5 text-orange-500 mt-0.5" />
@@ -604,9 +612,19 @@ export function ImportExportSettings() {
                         <td className="p-3 pr-6 italic font-semibold text-rose-500">true, false</td>
                       </tr>
                       <tr>
+                        <td className="p-3 pl-6 font-mono font-bold text-primary">unit_of_measure</td>
+                        <td className="p-3 text-muted-foreground leading-relaxed">Leave blank for trackable items. Required for non-trackable rows.</td>
+                        <td className="p-3 pr-6 italic font-semibold text-primary/80">pc, pack, roll, meter, can, sack, box, pair, tank, set, unit</td>
+                      </tr>
+                      <tr>
                         <td className="p-3 pl-6 font-mono font-bold text-primary">condition</td>
                         <td className="p-3 text-muted-foreground leading-relaxed">The physical state of the item at the time of import.</td>
                         <td className="p-3 pr-6 italic">excellent, good, fair, poor, unusable</td>
+                      </tr>
+                      <tr>
+                        <td className="p-3 pl-6 font-mono font-bold text-primary">quantity</td>
+                        <td className="p-3 text-muted-foreground leading-relaxed font-semibold">Ignored for trackable items. Required for non-trackable rows and supports up to 3 decimal places.</td>
+                        <td className="p-3 pr-6 italic text-primary">Trackable: blank or whole number only; Non-trackable: &gt; 0.000</td>
                       </tr>
                       <tr>
                         <td className="p-3 pl-6 font-mono font-bold text-primary">serial_number</td>
@@ -632,11 +650,11 @@ export function ImportExportSettings() {
                   </div>
                   <div className="bg-muted/30 p-4 rounded-2xl border border-border font-mono text-[9px] overflow-x-auto whitespace-nowrap leading-relaxed opacity-80 hover:opacity-100 transition-opacity">
                     <div className="text-muted-foreground"># Trackable Asset Row</div>
-                    name,category,classification,item_type,is_trackable,serial_number
+                    name,category,classification,item_type,unit_of_measure,is_trackable,quantity,serial_number
                     <br />
-                    "Thermal Scanner (Fluke)","items_tools","equipment","electronics","true","TS-102938"
+                    "Thermal Scanner (Fluke)","items_tools","equipment","electronics","","true","","TS-102938"
                     <br />
-                    "Emergency Light","declogging","equipment","tools","true","EL-998877"
+                    "Emergency Light","declogging","equipment","tools","","true","","EL-998877"
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -646,9 +664,9 @@ export function ImportExportSettings() {
                   </div>
                   <div className="bg-muted/30 p-4 rounded-2xl border border-border font-mono text-[9px] overflow-x-auto whitespace-nowrap leading-relaxed opacity-80 hover:opacity-100 transition-opacity">
                     <div className="text-muted-foreground"># Non-Trackable Batch Row</div>
-                    name,category,classification,item_type,is_trackable,quantity,expiration_date
+                    name,category,classification,item_type,unit_of_measure,is_trackable,quantity,expiration_date
                     <br />
-                    "Powder Soap","cmp_pm_acu_pm","consumable","cleaning_supplies","false","500","2026-12-01"
+                    "Powder Soap","cmp_pm_acu_pm","consumable","cleaning_supplies","pack","false","500.5","2026-12-01"
                   </div>
                 </div>
               </div>

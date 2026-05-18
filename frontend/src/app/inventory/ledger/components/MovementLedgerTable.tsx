@@ -16,6 +16,7 @@ import {
   Undo2,
 } from 'lucide-react';
 import type { Anomaly, LedgerMovement } from '../lib/types';
+import { formatQuantity } from '@/lib/inventoryQuantity';
 
 export type MovementLedgerTab = 'ledger' | 'anomalies';
 
@@ -210,7 +211,7 @@ export function MovementLedgerTable({
                         }`}
                     >
                       {qty > 0 ? '+' : ''}
-                      {qty}
+                      {formatQuantity(qty)}
                     </span>
                   </td>
 

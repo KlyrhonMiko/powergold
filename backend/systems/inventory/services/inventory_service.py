@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 import re
 from collections import Counter
 from typing import Any, Optional, cast
@@ -29,6 +30,13 @@ from systems.inventory.models.borrow_request import BorrowRequest
 from systems.inventory.schemas.inventory_batch_schemas import (
     InventoryBatchCreate,
     InventoryBatchUpdate,
+)
+from systems.inventory.quantity import (
+    TRACKABLE_UNIT_QUANTITY,
+    ZERO_QUANTITY,
+    format_quantity,
+    quantize_quantity,
+    require_whole_quantity,
 )
 
 VALID_UNIT_STATUSES = {
@@ -76,7 +84,7 @@ UNIT_RETIRED_NOTE_PATTERN = re.compile(
 )
 
 
-def _movement_increases_batch_total(movement_type: str, qty_change: int) -> bool:
+def _movement_increases_batch_total(movement_type: str, qty_change: Decimal) -> bool:
     return qty_change > 0 and movement_type != "borrow_return"
 
 class InventoryService(BaseService[InventoryItem, InventoryItemCreate, InventoryItemUpdate]):
@@ -124,6 +132,66 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
                 table_name="inventory",
                 field_name="category",
                 field_label="inventory item category",
+            )
+        if data.get("unit_of_measure"):
+            self._require_config_key(
+                session,
+                key=str(data["unit_of_measure"]),
+                table_name="inventory",
+                field_name="unit_of_measure",
+                field_label="inventory unit of measure",
+            )
+
+    @staticmethod
+    def _normalize_optional_text(value: str | None) -> str | None:
+        if value == "":
+            return None
+        return value
+
+    def _normalize_item_schema(self, schema: InventoryItemCreate | InventoryItemUpdate) -> None:
+        schema.item_type = self._normalize_optional_text(schema.item_type)
+        schema.classification = self._normalize_optional_text(schema.classification)
+        schema.category = self._normalize_optional_text(schema.category)
+        schema.unit_of_measure = self._normalize_optional_text(schema.unit_of_measure)
+        schema.description = self._normalize_optional_text(schema.description)
+
+    def _validate_item_trackability(
+        self,
+        *,
+        data: dict[str, Any],
+        existing_item: InventoryItem | None = None,
+    ) -> None:
+        next_is_trackable = bool(
+            data["is_trackable"]
+            if "is_trackable" in data
+            else existing_item.is_trackable
+            if existing_item is not None
+            else False
+        )
+        incoming_uom = data.get("unit_of_measure") if "unit_of_measure" in data else None
+        effective_uom = incoming_uom
+        if effective_uom is None and existing_item is not None:
+            effective_uom = existing_item.unit_of_measure
+
+        toggling_to_non_trackable = (
+            existing_item is not None
+            and existing_item.is_trackable
+            and "is_trackable" in data
+            and not next_is_trackable
+        )
+
+        if next_is_trackable:
+            if incoming_uom not in (None, ""):
+                raise ValueError("Trackable items cannot have a unit_of_measure.")
+            data["unit_of_measure"] = None
+            return
+
+        if existing_item is None and not effective_uom:
+            raise ValueError("Non-trackable items require a unit_of_measure.")
+
+        if toggling_to_non_trackable and not effective_uom:
+            raise ValueError(
+                "unit_of_measure is required when changing an item to non-trackable."
             )
 
     def get_all(
@@ -246,14 +314,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         prefix: str | None = "ITEM",
         actor_id: UUID | None = None,
     ) -> InventoryItem:
-        if schema.item_type == "":
-            schema.item_type = None
-        if schema.classification == "":
-            schema.classification = None
-        if schema.category == "":
-            schema.category = None
-        if schema.description == "":
-            schema.description = None
+        self._normalize_item_schema(schema)
 
         self.validate_uniqueness(
             session, 
@@ -261,7 +322,9 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             unique_fields=[["name", "classification", "item_type"]]
         )
 
-        self._validate_item_config(session, schema.model_dump())
+        data = schema.model_dump()
+        self._validate_item_trackability(data=data)
+        self._validate_item_config(session, data)
 
         return super().create(
             session, 
@@ -277,16 +340,10 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         schema: InventoryItemUpdate,
         actor_id: UUID | None = None,
     ) -> InventoryItem:
-        if schema.item_type == "":
-            schema.item_type = None
-        if schema.classification == "":
-            schema.classification = None
-        if schema.category == "":
-            schema.category = None
-        if schema.description == "":
-            schema.description = None
+        self._normalize_item_schema(schema)
 
         obj_data = schema.model_dump(exclude_unset=True)
+        self._validate_item_trackability(data=obj_data, existing_item=db_obj)
         self._validate_item_config(session, obj_data)
         return super().update(
             session, 
@@ -368,7 +425,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             
         return "healthy"
 
-    def get_item_balances(self, session: Session, item: InventoryItem) -> dict[str, int]:
+    def get_item_balances(self, session: Session, item: InventoryItem) -> dict[str, Decimal]:
         if item.is_trackable:
             total_stmt = select(func.count(InventoryUnit.id)).where(
                 InventoryUnit.inventory_uuid == item.id,
@@ -382,7 +439,10 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             )
             total_qty = int(session.exec(total_stmt).one() or 0)
             available_qty = int(session.exec(available_stmt).one() or 0)
-            return {"total_qty": total_qty, "available_qty": available_qty}
+            return {
+                "total_qty": quantize_quantity(total_qty),
+                "available_qty": quantize_quantity(available_qty),
+            }
 
         total_stmt = select(func.sum(InventoryBatch.total_qty)).where(
             InventoryBatch.inventory_uuid == item.id,
@@ -395,8 +455,8 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         total_sum = session.exec(total_stmt).one()
         available_sum = session.exec(available_stmt).one()
         return {
-            "total_qty": int(total_sum or 0),
-            "available_qty": int(available_sum or 0),
+            "total_qty": quantize_quantity(total_sum or ZERO_QUANTITY),
+            "available_qty": quantize_quantity(available_sum or ZERO_QUANTITY),
         }
 
     def get_item_condition(self, session: Session, item: InventoryItem) -> str:
@@ -497,8 +557,8 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             inventory_uuid=item.id,
             expiration_date=schema.expiration_date,
             description=schema.description,
-            available_qty=0,
-            total_qty=0,
+            available_qty=ZERO_QUANTITY,
+            total_qty=ZERO_QUANTITY,
         )
         batch.status = self.recalculate_batch_status(session, batch)
         
@@ -613,7 +673,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         self, 
         session: Session, 
         item_id: str, 
-        qty_change: int, 
+        qty_change: Decimal | int | str | float, 
         movement_type: str = "manual_adjustment",
         reference_id: str | None = None,
         reference_type: str | None = None,
@@ -659,7 +719,14 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         if not db_obj:
             raise ValueError(f"Item {item_id} not found")
 
-        if not db_obj.is_trackable and qty_change != 0 and batch_id is None:
+        normalized_qty_change = quantize_quantity(qty_change)
+        if db_obj.is_trackable:
+            normalized_qty_change = require_whole_quantity(
+                normalized_qty_change,
+                field_name="qty_change",
+            )
+
+        if not db_obj.is_trackable and normalized_qty_change != ZERO_QUANTITY and batch_id is None:
             raise ValueError(
                 f"Non-trackable item {item_id} requires a batch_id for quantity-changing movements"
             )
@@ -694,32 +761,32 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             reference_type=reference_type,
         )
 
-        effective_qty_change = qty_change
+        effective_qty_change = normalized_qty_change
         if unit is not None:
-            if qty_change < 0 and unit.status != "available":
-                effective_qty_change = 0
-            elif qty_change > 0 and unit.status == "available":
-                effective_qty_change = 0
+            if normalized_qty_change < 0 and unit.status != "available":
+                effective_qty_change = ZERO_QUANTITY
+            elif normalized_qty_change > 0 and unit.status == "available":
+                effective_qty_change = ZERO_QUANTITY
 
         projected_available_qty = current_balances["available_qty"] + effective_qty_change
 
         if projected_available_qty < 0:
             raise ValueError(
                 f"Insufficient available stock for {item_id}. "
-                f"Available: {current_balances['available_qty']}, Requested change: {qty_change}"
+                f"Available: {format_quantity(current_balances['available_qty'])}, Requested change: {format_quantity(normalized_qty_change)}"
             )
 
         if batch is not None:
-            projected_batch_available_qty = batch.available_qty + qty_change
+            projected_batch_available_qty = batch.available_qty + normalized_qty_change
             if projected_batch_available_qty < 0:
                 raise ValueError(
                     f"Insufficient available stock in batch {batch.batch_id}. "
-                    f"Available: {batch.available_qty}, Requested change: {qty_change}"
+                    f"Available: {format_quantity(batch.available_qty)}, Requested change: {format_quantity(normalized_qty_change)}"
                 )
 
             batch.available_qty = projected_batch_available_qty
-            if qty_change > 0 and movement_type != "borrow_return":
-                batch.total_qty += qty_change
+            if normalized_qty_change > 0 and movement_type != "borrow_return":
+                batch.total_qty += normalized_qty_change
 
             batch.status = self.recalculate_batch_status(session, batch)
             session.add(batch)
@@ -732,7 +799,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             inventory_uuid=db_obj.id,
             batch_uuid=batch.id if batch else None,
             unit_uuid=unit.id if unit else None,
-            qty_change=qty_change,
+            qty_change=normalized_qty_change,
             movement_type=movement_type,
             reason_code=reason_code,
             reference_id=reference_id,
@@ -743,7 +810,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
 
         audit_data_after = {
             "qty": projected_available_qty,
-            "qty_change": qty_change,
+            "qty_change": normalized_qty_change,
             "movement_type": movement_type,
             "reason_code": reason_code,
             "reference_id": reference_id,
@@ -959,7 +1026,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             ).where(InventoryMovement.inventory_uuid == item.id)
         ).one()
         movement_count = int(movement_aggregate[0] or 0)
-        ledger_balance = int(movement_aggregate[1] or 0)
+        ledger_balance = quantize_quantity(movement_aggregate[1] or ZERO_QUANTITY)
         latest_movement_at = movement_aggregate[2]
         balances = self.get_item_balances(session, item)
         actual_balance = balances["available_qty"]
@@ -1173,7 +1240,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         self,
         session: Session,
         movement: InventoryMovement,
-    ) -> tuple[InventoryItem, int] | None:
+    ) -> tuple[InventoryItem, Decimal] | None:
         transition = self._extract_unit_transition_from_movement(movement)
         if transition is None:
             return None
@@ -1264,8 +1331,14 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         )
 
         movement_count = len(movements)
-        total_inflow = sum(m.qty_change for m in movements if m.qty_change > 0)
-        total_outflow = sum(m.qty_change for m in movements if m.qty_change < 0)
+        total_inflow = sum(
+            (m.qty_change for m in movements if m.qty_change > 0),
+            ZERO_QUANTITY,
+        )
+        total_outflow = sum(
+            (m.qty_change for m in movements if m.qty_change < 0),
+            ZERO_QUANTITY,
+        )
         by_type_counter = Counter(m.movement_type for m in movements)
         actor_ids = {m.actor_id for m in movements if m.actor_id is not None}
         actor_map: dict[UUID, str] = {}
@@ -1649,7 +1722,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         movement = InventoryMovement(
             movement_id=get_next_sequence(session, InventoryMovement, "movement_id", "MOV"),
             inventory_uuid=item.id,
-            qty_change=1,
+            qty_change=TRACKABLE_UNIT_QUANTITY,
             movement_type="procurement",
             note=f"Initial unit creation: {unit.unit_id}",
             actor_id=actor_id,
@@ -1768,7 +1841,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             movement = InventoryMovement(
                 movement_id=get_next_sequence(session, InventoryMovement, "movement_id", "MOV"),
                 inventory_uuid=item.id,
-                qty_change=len(created_units),
+                qty_change=TRACKABLE_UNIT_QUANTITY * len(created_units),
                 movement_type="procurement",
                 note=f"Batch unit creation: {len(created_units)} units",
                 actor_id=actor_id,
@@ -1883,11 +1956,11 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
                 new_is_avail = after_state["status"] == "available"
                 
                 # Determine qty change for the ledger (which tracks availability)
-                ledger_qty_change = 0
+                ledger_qty_change = ZERO_QUANTITY
                 if old_is_avail and not new_is_avail:
-                    ledger_qty_change = -1
+                    ledger_qty_change = -TRACKABLE_UNIT_QUANTITY
                 elif not old_is_avail and new_is_avail:
-                    ledger_qty_change = 1
+                    ledger_qty_change = TRACKABLE_UNIT_QUANTITY
                 
                 # Internal mapping of status to movement type
                 # Note: These must match seed_configuration.py
@@ -1993,7 +2066,11 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             # Record retirement movement in the ledger
             # Only record -1 if it was previously available
             # If it was already non-available (e.g. maintenance), qty_change is 0
-            ledger_qty_change = -1 if before_state["status"] == "available" else 0
+            ledger_qty_change = (
+                -TRACKABLE_UNIT_QUANTITY
+                if before_state["status"] == "available"
+                else ZERO_QUANTITY
+            )
 
             movement = InventoryMovement(
                 movement_id=get_next_sequence(session, InventoryMovement, "movement_id", "MOV"),

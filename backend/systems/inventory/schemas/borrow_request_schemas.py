@@ -3,6 +3,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_validator
 
+from systems.inventory.quantity import (
+    NonNegativeQuantityDecimal,
+    PositiveQuantityDecimal,
+    serialize_quantity,
+)
 from utils.time_utils import format_datetime
 
 
@@ -10,7 +15,7 @@ class BorrowRequestItemCreate(BaseModel):
     """Schema for a single item in a multi-item borrow request."""
 
     item_id: str = Field(..., max_length=50)
-    qty_requested: int = Field(..., gt=0)
+    qty_requested: PositiveQuantityDecimal
 
 
 class BorrowRequestItemRead(BaseModel):
@@ -20,9 +25,10 @@ class BorrowRequestItemRead(BaseModel):
 
     item_id: str
     name: str
-    qty_requested: int
+    qty_requested: PositiveQuantityDecimal
     classification: Optional[str] = None
     item_type: Optional[str] = None
+    unit_of_measure: Optional[str] = None
     is_trackable: bool = False
 
     @model_validator(mode="before")
@@ -34,8 +40,13 @@ class BorrowRequestItemRead(BaseModel):
                 data.__dict__.setdefault("name", data.inventory_item.name)
                 data.__dict__.setdefault("classification", data.inventory_item.classification)
                 data.__dict__.setdefault("item_type", data.inventory_item.item_type)
+                data.__dict__.setdefault("unit_of_measure", data.inventory_item.unit_of_measure)
                 data.__dict__.setdefault("is_trackable", data.inventory_item.is_trackable)
         return data
+
+    @field_serializer("qty_requested")
+    def serialize_qty_requested(self, value):
+        return serialize_quantity(value)
 
 class BorrowRequestBase(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
@@ -104,9 +115,10 @@ class BorrowRequestBatchRead(BaseModel):
     batch_id: str
     item_id: str | None = None
     item_name: str | None = None
-    qty_assigned: int
-    qty_returned: int = 0
-    qty_not_returned: int = 0
+    unit_of_measure: Optional[str] = None
+    qty_assigned: NonNegativeQuantityDecimal
+    qty_returned: NonNegativeQuantityDecimal = 0
+    qty_not_returned: NonNegativeQuantityDecimal = 0
     assigned_at: Optional[datetime] = None
     released_at: Optional[datetime] = None
     returned_at: Optional[datetime] = None
@@ -114,6 +126,10 @@ class BorrowRequestBatchRead(BaseModel):
     @field_serializer("assigned_at", "released_at", "returned_at")
     def serialize_dates(self, dt: datetime | None) -> str | None:
         return format_datetime(dt)
+
+    @field_serializer("qty_assigned", "qty_returned", "qty_not_returned")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)
 
 class BorrowRequestRead(BaseModel):
     request_id: str
@@ -177,7 +193,7 @@ class BorrowRequestUnitReturn(BaseModel):
 
 class BorrowRequestBatchReturn(BaseModel):
     borrow_batch_id: str = Field(..., max_length=50)
-    qty_returned: int = Field(ge=0)
+    qty_returned: NonNegativeQuantityDecimal
 
 
 class BorrowRequestReturn(BaseModel):
@@ -199,7 +215,7 @@ class BorrowRequestUnitAssign(BaseModel):
 
 class BorrowRequestBatchAssignment(BaseModel):
     batch_id: str
-    qty: int = Field(gt=0)
+    qty: PositiveQuantityDecimal
 
 
 class BorrowRequestBatchAssign(BaseModel):
@@ -210,7 +226,7 @@ class BorrowRequestBatchAssign(BaseModel):
 
 class BatchItem(BaseModel):
     item_id: str
-    qty_requested: int
+    qty_requested: PositiveQuantityDecimal
 
 
 class BorrowRequestClose(BaseModel):
@@ -221,12 +237,17 @@ class ReleaseReceiptItemRead(BaseModel):
     item_id: str
     name: str
     classification: Optional[str] = None
+    unit_of_measure: Optional[str] = None
     is_trackable: bool = False
-    qty_released: int
-    qty_returned: int = 0
-    qty_not_returned: int = 0
+    qty_released: PositiveQuantityDecimal
+    qty_returned: NonNegativeQuantityDecimal = 0
+    qty_not_returned: NonNegativeQuantityDecimal = 0
     serial_numbers: list[str] = []
     batch_details: list[dict] = []
+
+    @field_serializer("qty_released", "qty_returned", "qty_not_returned")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)
 
 
 class ReleaseReceiptRead(BaseModel):

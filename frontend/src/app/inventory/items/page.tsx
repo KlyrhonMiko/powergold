@@ -42,6 +42,7 @@ export default function InventoryPage() {
     category: '',
     classification: '',
     item_type: '',
+    unit_of_measure: '',
     is_trackable: false,
     description: '',
   });
@@ -53,7 +54,7 @@ export default function InventoryPage() {
 
   // Queries
   const { data: configsData } = useInventoryConfigs();
-  const { classifications = [], itemTypes = [], categories = [] } = configsData || {};
+  const { classifications = [], itemTypes = [], categories = [], unitOfMeasures = [] } = configsData || {};
 
   const { data: itemsResponse, isLoading: itemsLoading, error: itemsError } = useInventoryItems({
     page,
@@ -76,7 +77,7 @@ export default function InventoryPage() {
   }, [debouncedSearch, debouncedCategory, classificationFilter, itemTypeFilter, perPage, activeTab]);
 
   const resetForm = () => {
-    setFormData({ name: '', category: '', classification: '', item_type: '', is_trackable: false, description: '' });
+    setFormData({ name: '', category: '', classification: '', item_type: '', unit_of_measure: '', is_trackable: activeTab === 'equipments', description: '' });
     setEditingItem(null);
     setIsModalOpen(false);
   };
@@ -88,6 +89,7 @@ export default function InventoryPage() {
       category: item.category,
       classification: item.classification || '',
       item_type: item.item_type || '',
+      unit_of_measure: item.unit_of_measure || '',
       is_trackable: item.is_trackable ?? false,
       description: item.description || '',
     });
@@ -100,6 +102,7 @@ export default function InventoryPage() {
     const validationError = validateInventoryItemForm(formData, {
       categories: categories.map((entry) => entry.key),
       itemTypes: itemTypes.map((entry) => entry.key),
+      unitOfMeasures: unitOfMeasures.map((entry) => entry.key),
     });
     if (validationError) {
       toast.error(validationError);
@@ -115,6 +118,7 @@ export default function InventoryPage() {
             category: formData.category,
             classification: formData.classification || undefined,
             item_type: formData.item_type || undefined,
+            unit_of_measure: formData.is_trackable ? undefined : formData.unit_of_measure || undefined,
             is_trackable: formData.is_trackable,
             description: formData.description || undefined,
           }
@@ -126,6 +130,7 @@ export default function InventoryPage() {
           category: formData.category,
           classification: formData.classification || undefined,
           item_type: formData.item_type || undefined,
+          unit_of_measure: formData.is_trackable ? undefined : formData.unit_of_measure || undefined,
           is_trackable: formData.is_trackable,
           description: formData.description || undefined,
         });
@@ -233,6 +238,7 @@ export default function InventoryPage() {
           classifications={classifications}
           itemTypes={itemTypes}
           categories={categories}
+          unitOfMeasures={unitOfMeasures}
           setFormData={setFormData}
           onClose={() => { }}
           onSubmit={handleSave}

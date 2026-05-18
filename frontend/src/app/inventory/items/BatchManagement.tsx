@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { DatePicker } from '@/components/ui/date-picker';
 import { FormSelect } from '@/components/ui/form-select';
 import { parseSystemDate } from '@/lib/utils';
+import { formatQuantity, parseQuantityInput } from '@/lib/inventoryQuantity';
 
 interface BatchManagementProps {
   itemId: string;
@@ -108,8 +109,8 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
       }
 
       const absoluteQty = Math.abs(adjustData.qty_change);
-      if (!Number.isFinite(absoluteQty) || absoluteQty < 1) {
-        toast.error('Quantity must be at least 1.');
+      if (!Number.isFinite(absoluteQty) || absoluteQty <= 0) {
+        toast.error('Quantity must be greater than 0.');
         return;
       }
 
@@ -242,9 +243,10 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
                   <input
                     required
                     type="number"
-                    min="1"
+                    min="0.001"
+                    step="0.001"
                     value={adjustData.qty_change === 0 ? '' : Math.abs(adjustData.qty_change)}
-                    onChange={(e) => setAdjustData({ ...adjustData, qty_change: parseInt(e.target.value) || 0 })}
+                    onChange={(e) => setAdjustData({ ...adjustData, qty_change: parseQuantityInput(e.target.value) || 0 })}
                     className="w-full h-10 px-3 rounded-lg bg-background border border-border text-sm"
                     placeholder="Enter amount"
                   />
@@ -316,8 +318,8 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
                       </div>
                     </td>
                     <td className="p-3 text-sm">
-                      <span className="font-bold text-foreground">{batch.available_qty}</span>
-                      <span className="text-muted-foreground"> / {batch.total_qty}</span>
+                      <span className="font-bold text-foreground">{formatQuantity(batch.available_qty)}</span>
+                      <span className="text-muted-foreground"> / {formatQuantity(batch.total_qty)}</span>
                     </td>
                     <td className="p-3 text-sm text-muted-foreground">
                       {batch.expiration_date ? parseSystemDate(batch.expiration_date).toLocaleDateString() : 'No expiry'}

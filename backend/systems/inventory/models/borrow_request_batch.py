@@ -1,10 +1,13 @@
+from decimal import Decimal
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy import Column, Numeric, text
 from sqlmodel import Field, Relationship
 
 from core.base_model import BaseModel
+from systems.inventory.quantity import ZERO_QUANTITY
 from utils.time_utils import get_now_manila
 
 if TYPE_CHECKING:
@@ -19,7 +22,11 @@ class BorrowRequestBatch(BaseModel, table=True):
     borrow_uuid: UUID | None = Field(default=None, foreign_key="borrow_requests.id", index=True)
     batch_uuid: UUID | None = Field(default=None, foreign_key="inventory_batches.id", index=True)
 
-    qty_assigned: int = Field(default=0, ge=0)
+    qty_assigned: Decimal = Field(
+        default=ZERO_QUANTITY,
+        ge=0,
+        sa_column=Column(Numeric(18, 3), nullable=False, server_default=text("0")),
+    )
     
     assigned_by: UUID | None = Field(default=None, foreign_key="users.id")
     assigned_at: datetime | None = Field(default_factory=get_now_manila)

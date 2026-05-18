@@ -22,6 +22,7 @@ from systems.inventory.models.inventory_unit import InventoryUnit
 from systems.inventory.models.inventory_batch import InventoryBatch
 from systems.inventory.models.inventory_movement import InventoryMovement
 from systems.inventory.schemas.import_export_schemas import TimelineMode
+from systems.inventory.quantity import format_quantity
 from utils.time_utils import normalize_time_window
 
 class ExportService:
@@ -171,6 +172,10 @@ class ExportService:
                 f"Export limit exceeded for inventory rows. Maximum {self._MAX_EXPORT_ROWS} rows per export."
             )
         rows.append(row)
+
+    @staticmethod
+    async def _stream_bytes(payload: bytes):
+        yield payload
 
     def _resolve_inventory_unit_by_serial(
         self,
@@ -423,7 +428,7 @@ class ExportService:
         wb.save(output)
         output.seek(0)
         return StreamingResponse(
-            iter([output.getvalue()]),
+            self._stream_bytes(output.getvalue()),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"},
         )
@@ -566,7 +571,7 @@ class ExportService:
                 include_archived=include_archived,
             )
 
-        headers = ["name", "category", "classification", "item_type", "is_trackable", "description", "condition", "quantity", "serial_number", "expiration_date"]
+        headers = ["name", "category", "classification", "item_type", "unit_of_measure", "is_trackable", "description", "condition", "quantity", "serial_number", "expiration_date"]
         
         # We export a row for each unit (if trackable) or each batch (if not)
         data = []
@@ -641,6 +646,7 @@ class ExportService:
                         item.category or "",
                         item.classification or "",
                         item.item_type or "",
+                        "",
                         "true",
                         "",
                         "",
@@ -654,6 +660,7 @@ class ExportService:
                         item.category or "",
                         item.classification or "",
                         item.item_type or "",
+                        "",
                         "true",
                         unit.description or "",
                         unit.condition,
@@ -669,6 +676,7 @@ class ExportService:
                         item.category or "",
                         item.classification or "",
                         item.item_type or "",
+                        item.unit_of_measure or "",
                         "false",
                         "",
                         "",
@@ -682,10 +690,11 @@ class ExportService:
                         item.category or "",
                         item.classification or "",
                         item.item_type or "",
+                        item.unit_of_measure or "",
                         "false",
                         batch.description or "",
                         "",
-                        str(batch.total_qty),
+                        format_quantity(batch.total_qty),
                         "",
                         batch.expiration_date.isoformat() if batch.expiration_date else ""
                     ])
@@ -1270,6 +1279,7 @@ class ExportService:
             "category",
             "classification",
             "item_type",
+            "unit_of_measure",
             "is_trackable",
             "description",
             "condition",
@@ -1282,13 +1292,14 @@ class ExportService:
             if item.is_trackable:
                 units = units_by_item_id.get(item.id, [])
                 if not units:
-                    self._append_inventory_row(rows, [item.name, item.category or "", item.classification or "", item.item_type or "", "true", "", "", "0", "", ""])
+                    self._append_inventory_row(rows, [item.name, item.category or "", item.classification or "", item.item_type or "", "", "true", "", "", "0", "", ""])
                 for unit in units:
                     self._append_inventory_row(rows, [
                         item.name,
                         item.category or "",
                         item.classification or "",
                         item.item_type or "",
+                        "",
                         "true",
                         unit.description or "",
                         unit.condition or "",
@@ -1299,17 +1310,18 @@ class ExportService:
             else:
                 batches = batches_by_item_id.get(item.id, [])
                 if not batches:
-                    self._append_inventory_row(rows, [item.name, item.category or "", item.classification or "", item.item_type or "", "false", "", "", "0", "", ""])
+                    self._append_inventory_row(rows, [item.name, item.category or "", item.classification or "", item.item_type or "", item.unit_of_measure or "", "false", "", "", "0", "", ""])
                 for batch in batches:
                     self._append_inventory_row(rows, [
                         item.name,
                         item.category or "",
                         item.classification or "",
                         item.item_type or "",
+                        item.unit_of_measure or "",
                         "false",
                         batch.description or "",
                         "",
-                        str(batch.total_qty),
+                        format_quantity(batch.total_qty),
                         "",
                         batch.expiration_date.isoformat() if batch.expiration_date else "",
                     ])
@@ -1498,6 +1510,7 @@ class ExportService:
             "Borrower's Name + Employee ID",
             "What they Borrowed",
             "Serial/Batch Number",
+            "Unit of Measure",
             "Quantity",
             "Returned Quantity",
             "Not Returned Quantity",
@@ -1566,6 +1579,7 @@ class ExportService:
                             borrower_label,
                             resolved_item.name if resolved_item else "Deleted Inventory Item",
                             unit.serial_number if unit and unit.serial_number else "",
+                            "",
                             "1",
                             "1" if assignment.returned_at else "0",
                             "0" if assignment.returned_at else "1",
@@ -1594,9 +1608,10 @@ class ExportService:
                             borrower_label,
                             resolved_item.name if resolved_item else "Deleted Inventory Item",
                             batch.batch_id if batch else "",
-                            str(assignment.qty_assigned),
-                            str(serialized_batch.qty_returned if serialized_batch else 0),
-                            str(serialized_batch.qty_not_returned if serialized_batch else assignment.qty_assigned),
+                            resolved_item.unit_of_measure if resolved_item else "",
+                            format_quantity(assignment.qty_assigned),
+                            format_quantity(serialized_batch.qty_returned if serialized_batch else 0),
+                            format_quantity(serialized_batch.qty_not_returned if serialized_batch else assignment.qty_assigned),
                             (
                                 "Fully Returned"
                                 if (serialized_batch.qty_not_returned if serialized_batch else assignment.qty_assigned) == 0
@@ -1623,9 +1638,10 @@ class ExportService:
                         borrower_label,
                         inventory_item.name if inventory_item else "Deleted Inventory Item",
                         "",
-                        str(request_item.qty_requested),
-                        str(request_item.qty_requested if request.returned_at else 0),
-                        str(0 if request.returned_at else request_item.qty_requested),
+                        inventory_item.unit_of_measure if inventory_item and not inventory_item.is_trackable else "",
+                        format_quantity(request_item.qty_requested),
+                        format_quantity(request_item.qty_requested if request.returned_at else 0),
+                        format_quantity(0 if request.returned_at else request_item.qty_requested),
                         "Fully Returned" if request.returned_at else "Not Returned",
                         request.status,
                         due_date,
@@ -1825,8 +1841,9 @@ class ExportService:
             writer.writerow(sanitized_headers)
             writer.writerows(sanitized_data)
             output.seek(0)
+            payload = output.getvalue().encode("utf-8")
             return StreamingResponse(
-                iter([output.getvalue()]),
+                self._stream_bytes(payload),
                 media_type="text/csv",
                 headers={"Content-Disposition": f"attachment; filename={filename}.csv"}
             )
@@ -1851,7 +1868,7 @@ class ExportService:
             wb.save(output)
             output.seek(0)
             return StreamingResponse(
-                iter([output.getvalue()]),
+                self._stream_bytes(output.getvalue()),
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 headers={"Content-Disposition": f"attachment; filename={filename}.xlsx"}
             )

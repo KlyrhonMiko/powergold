@@ -37,6 +37,19 @@ SYSTEM_CONFIGS = [
     {"system": "inventory", "key": "system_reprocess_replacement_compressor", "value": "SYSTEM REPROCESS & REPLACEMENT OF COMPRESSOR", "category": "inventory_category", "description": "Tools and consumables for system reprocess and compressor replacement"},
     {"system": "inventory", "key": "exhaust_pm", "value": "EXHAUST PM", "category": "inventory_category", "description": "Equipment used for exhaust preventive maintenance"},
 
+    # Inventory Units Of Measure
+    {"system": "inventory", "key": "pc", "value": "pc", "category": "inventory_unit_of_measure", "description": "Piece-based quantity"},
+    {"system": "inventory", "key": "pack", "value": "pack", "category": "inventory_unit_of_measure", "description": "Pack-based quantity"},
+    {"system": "inventory", "key": "roll", "value": "roll", "category": "inventory_unit_of_measure", "description": "Roll-based quantity"},
+    {"system": "inventory", "key": "meter", "value": "meter", "category": "inventory_unit_of_measure", "description": "Meter-based quantity"},
+    {"system": "inventory", "key": "can", "value": "can", "category": "inventory_unit_of_measure", "description": "Can-based quantity"},
+    {"system": "inventory", "key": "sack", "value": "sack", "category": "inventory_unit_of_measure", "description": "Sack-based quantity"},
+    {"system": "inventory", "key": "box", "value": "box", "category": "inventory_unit_of_measure", "description": "Box-based quantity"},
+    {"system": "inventory", "key": "pair", "value": "pair", "category": "inventory_unit_of_measure", "description": "Pair-based quantity"},
+    {"system": "inventory", "key": "tank", "value": "tank", "category": "inventory_unit_of_measure", "description": "Tank-based quantity"},
+    {"system": "inventory", "key": "set", "value": "set", "category": "inventory_unit_of_measure", "description": "Set-based quantity"},
+    {"system": "inventory", "key": "unit", "value": "unit", "category": "inventory_unit_of_measure", "description": "Generic unit-based quantity"},
+
     # Inventory Units Status
     {"system": "inventory", "key": "available", "value": "Available", "category": "inventory_units_status", "description": "Unit is available for borrowing"},
     {"system": "inventory", "key": "borrowed", "value": "Borrowed", "category": "inventory_units_status", "description": "Unit is currently borrowed"},

@@ -2,6 +2,7 @@ import type { RecentTransaction } from '../lib/types';
 import Link from 'next/link';
 import { ArrowRight, Clock, Inbox, AlertCircle } from 'lucide-react';
 import { parseSystemDate } from '@/lib/utils';
+import { formatQuantity, formatQuantityWithUnit } from '@/lib/inventoryQuantity';
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400' },
@@ -46,7 +47,10 @@ function summarizeItems(items: RecentTransaction['items']): string {
   const first = items[0];
   const name = first.name || first.item_id;
   const qty = first.qty_requested;
-  const label = qty > 1 ? `${qty}x ${name}` : name;
+  const formattedQty = first.classification === 'equipment'
+    ? formatQuantity(qty)
+    : formatQuantityWithUnit(qty, first.unit_of_measure);
+  const label = !first.unit_of_measure && qty === 1 ? name : `${formattedQty} ${name}`;
   if (items.length === 1) return label;
   return `${label} +${items.length - 1} more`;
 }

@@ -39,6 +39,7 @@ export interface RecentTransactionItem {
   qty_requested: number;
   classification?: string;
   item_type?: string;
+  unit_of_measure?: string | null;
 }
 
 export interface RecentTransaction {
@@ -58,6 +59,7 @@ export interface LowStockItem {
   item_id: string;
   name: string;
   category: string | null;
+  unit_of_measure?: string | null;
   available_qty: number;
   total_qty: number;
 }

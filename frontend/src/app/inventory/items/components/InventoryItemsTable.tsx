@@ -4,6 +4,7 @@ import { Edit2, History as HistoryIcon, Layers, Loader2, MoreHorizontal, Package
 import { useState } from 'react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import type { InventoryItem } from '../api';
+import { formatQuantity } from '@/lib/inventoryQuantity';
 
 function conditionStyle(condition?: string) {
   switch (condition?.toLowerCase()) {
@@ -52,8 +53,8 @@ function QuantityBar({ available, total }: { available: number; total: number })
         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="text-sm tabular-nums font-medium whitespace-nowrap">
-        <span className="text-foreground">{available}</span>
-        <span className="text-muted-foreground">/{total}</span>
+        <span className="text-foreground">{formatQuantity(available)}</span>
+        <span className="text-muted-foreground">/{formatQuantity(total)}</span>
       </span>
     </div>
   );
@@ -202,6 +203,9 @@ export function InventoryItemsTable({
                     <p className="font-semibold text-sm text-foreground truncate">{item.name}</p>
                     {item.description && (
                       <p className="text-xs text-muted-foreground truncate max-w-[220px] mt-0.5">{item.description}</p>
+                    )}
+                    {!item.is_trackable && item.unit_of_measure && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5 uppercase tracking-wide">{item.unit_of_measure}</p>
                     )}
                   </div>
                 </div>

@@ -2,6 +2,7 @@ from typing import Optional
 from datetime import datetime
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from systems.inventory.quantity import NonNegativeQuantityDecimal, serialize_quantity
 from utils.time_utils import format_datetime
 
 class InventoryBatchBase(BaseModel):
@@ -27,8 +28,8 @@ class InventoryBatchRead(InventoryBatchBase):
     status: str
     description: Optional[str] = None
     # Actually, in this system, we tend to follow human-readable IDs.
-    total_qty: int
-    available_qty: int
+    total_qty: NonNegativeQuantityDecimal
+    available_qty: NonNegativeQuantityDecimal
     received_at: datetime
     
     # We might need the item_id in the response for convenience
@@ -40,3 +41,6 @@ class InventoryBatchRead(InventoryBatchBase):
             return None
         return format_datetime(dt)
 
+    @field_serializer("total_qty", "available_qty")
+    def serialize_quantities(self, value):
+        return serialize_quantity(value)

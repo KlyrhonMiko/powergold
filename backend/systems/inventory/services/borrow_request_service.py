@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from sqlmodel import Session, select, func, and_
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
@@ -34,6 +35,12 @@ from systems.admin.services.user_service import UserService
 from systems.admin.services.audit_service import audit_service
 from utils.id_generator import get_next_sequence
 from utils.time_utils import get_now_manila, normalize_datetime_to_manila
+from systems.inventory.quantity import (
+    TRACKABLE_UNIT_QUANTITY,
+    ZERO_QUANTITY,
+    format_quantity,
+    require_whole_quantity,
+)
 
 if TYPE_CHECKING:
     from systems.inventory.schemas.borrow_request_schemas import ReleaseReceiptRead
@@ -245,6 +252,7 @@ class BorrowService(
                 "name": item.name,
                 "classification": item.classification,
                 "item_type": item.item_type,
+                "unit_of_measure": item.unit_of_measure,
                 "is_trackable": item.is_trackable,
             }
             for item in items
@@ -490,7 +498,7 @@ class BorrowService(
         session: Session,
         request_id: str,
         assigned_batches: list[BorrowRequestBatch],
-    ) -> dict[UUID, int]:
+    ) -> dict[UUID, Decimal]:
         batch_uuids = [assignment.batch_uuid for assignment in assigned_batches if assignment.batch_uuid]
         if not batch_uuids:
             return {}
@@ -522,12 +530,13 @@ class BorrowService(
             if movement.reference_id
         }
 
-        qty_by_batch: dict[UUID, int] = {}
+        qty_by_batch: dict[UUID, Decimal] = {}
         for movement in return_movements:
             if movement.movement_id in reversed_movement_ids or movement.batch_uuid is None:
                 continue
             qty_by_batch[movement.batch_uuid] = (
-                qty_by_batch.get(movement.batch_uuid, 0) + max(movement.qty_change, 0)
+                qty_by_batch.get(movement.batch_uuid, ZERO_QUANTITY)
+                + max(movement.qty_change, ZERO_QUANTITY)
             )
         return qty_by_batch
 
@@ -564,7 +573,7 @@ class BorrowService(
         return [
             BorrowRequestBatchRead.model_validate(
                 {
-                    **assignment.model_dump(mode="json"),
+                    **assignment.model_dump(),
                     "batch_id": assignment.batch_id,
                     "item_id": item_details_map.get(
                         assignment.inventory_batch.inventory_uuid, {}
@@ -576,17 +585,22 @@ class BorrowService(
                     ).get("name")
                     if assignment.inventory_batch
                     else None,
+                    "unit_of_measure": item_details_map.get(
+                        assignment.inventory_batch.inventory_uuid, {}
+                    ).get("unit_of_measure")
+                    if assignment.inventory_batch
+                    else None,
                     "qty_returned": qty_returned_map.get(
                         assignment.batch_uuid,
-                        assignment.qty_assigned if assignment.returned_at is not None else 0,
+                        assignment.qty_assigned if assignment.returned_at is not None else ZERO_QUANTITY,
                     ),
                     "qty_not_returned": max(
                         assignment.qty_assigned
                         - qty_returned_map.get(
                             assignment.batch_uuid,
-                            assignment.qty_assigned if assignment.returned_at is not None else 0,
+                            assignment.qty_assigned if assignment.returned_at is not None else ZERO_QUANTITY,
                         ),
-                        0,
+                        ZERO_QUANTITY,
                     ),
                 }
             )
@@ -755,7 +769,7 @@ class BorrowService(
         for borrow_item in request_items:
             details = item_details_map.get(borrow_item.item_uuid, {})
             serial_numbers = []
-            qty_returned = 0
+            qty_returned = ZERO_QUANTITY
             qty_not_returned = borrow_item.qty_requested
             batch_details: list[dict[str, Any]] = []
             if details.get("is_trackable"):
@@ -770,8 +784,13 @@ class BorrowService(
                     for u in matching_units
                     if u.inventory_unit and u.inventory_unit.serial_number
                 ]
-                qty_returned = sum(1 for u in matching_units if u.returned_at is not None)
-                qty_not_returned = max(borrow_item.qty_requested - qty_returned, 0)
+                qty_returned = TRACKABLE_UNIT_QUANTITY * sum(
+                    1 for u in matching_units if u.returned_at is not None
+                )
+                qty_not_returned = max(
+                    borrow_item.qty_requested - qty_returned,
+                    ZERO_QUANTITY,
+                )
             else:
                 batch_details = [
                     {
@@ -783,14 +802,21 @@ class BorrowService(
                     for assignment in serialized_batch_assignments
                     if assignment.item_id == details.get("item_id")
                 ]
-                qty_returned = sum(detail["qty_returned"] for detail in batch_details)
-                qty_not_returned = sum(detail["qty_not_returned"] for detail in batch_details)
+                qty_returned = sum(
+                    (detail["qty_returned"] for detail in batch_details),
+                    ZERO_QUANTITY,
+                )
+                qty_not_returned = sum(
+                    (detail["qty_not_returned"] for detail in batch_details),
+                    ZERO_QUANTITY,
+                )
 
             receipt_items.append(
                 ReleaseReceiptItemRead(
                     item_id=details.get("item_id", ""),
                     name=details.get("name", ""),
                     classification=details.get("classification"),
+                    unit_of_measure=details.get("unit_of_measure"),
                     is_trackable=details.get("is_trackable", False),
                     qty_released=borrow_item.qty_requested,
                     qty_returned=qty_returned,
@@ -993,9 +1019,14 @@ class BorrowService(
             if a.inventory_unit and a.inventory_unit.inventory_uuid == item.id
         ]
 
-        if len(assignments) != borrow_item.qty_requested:
+        requested_qty = require_whole_quantity(
+            borrow_item.qty_requested,
+            field_name=f"qty_requested for trackable item '{item.item_id}'",
+        )
+
+        if len(assignments) != requested_qty:
             raise ValueError(
-                f"Trackable item '{item.item_id}' requires exactly {borrow_item.qty_requested} assigned units before release, but found {len(assignments)}"
+                f"Trackable item '{item.item_id}' requires exactly {format_quantity(requested_qty)} assigned units before release, but found {len(assignments)}"
             )
 
         return assignments
@@ -1018,11 +1049,11 @@ class BorrowService(
             if a.inventory_batch and a.inventory_batch.inventory_uuid == item.id
         ]
 
-        total_assigned = sum(a.qty_assigned for a in assignments)
+        total_assigned = sum((a.qty_assigned for a in assignments), ZERO_QUANTITY)
 
         if total_assigned != borrow_item.qty_requested:
             raise ValueError(
-                f"Non-trackable item '{item.item_id}' requires {borrow_item.qty_requested} assigned units before release, but found {total_assigned} assigned in batches."
+                f"Non-trackable item '{item.item_id}' requires {format_quantity(borrow_item.qty_requested)} assigned units before release, but found {format_quantity(total_assigned)} assigned in batches."
             )
 
         return assignments
@@ -1098,9 +1129,14 @@ class BorrowService(
         if not item.is_trackable:
             raise ValueError("Unit assignment is only applicable to trackable items")
 
-        if len(normalized_unit_ids) != borrow_item.qty_requested:
+        requested_qty = require_whole_quantity(
+            borrow_item.qty_requested,
+            field_name=f"qty_requested for trackable item '{item.item_id}'",
+        )
+
+        if len(normalized_unit_ids) != requested_qty:
             raise ValueError(
-                f"Expected {borrow_item.qty_requested} units for item {item.item_id}, got {len(normalized_unit_ids)}"
+                f"Expected {format_quantity(requested_qty)} units for item {item.item_id}, got {len(normalized_unit_ids)}"
             )
 
         # Clear existing assignments for THIS item to support reassignment
@@ -1212,24 +1248,24 @@ class BorrowService(
         if item_obj.is_trackable:
             raise ValueError("Batch assignment is only applicable to non-trackable items")
 
-        aggregated_assignments: dict[str, int] = {}
+        aggregated_assignments: dict[str, Decimal] = {}
         for assignment in batch_assignments:
             aggregated_assignments[assignment.batch_id] = (
-                aggregated_assignments.get(assignment.batch_id, 0) + assignment.qty
+                aggregated_assignments.get(assignment.batch_id, ZERO_QUANTITY) + assignment.qty
             )
 
         if len(aggregated_assignments) != len(batch_assignments):
             raise ValueError("batch_id values must be unique within a single assignment request")
 
-        total_to_assign = sum(aggregated_assignments.values())
+        total_to_assign = sum(aggregated_assignments.values(), ZERO_QUANTITY)
         if total_to_assign != borrow_item.qty_requested:
             raise ValueError(
-                f"Expected to assign {borrow_item.qty_requested} units, but got assignments for {total_to_assign}"
+                f"Expected to assign {format_quantity(borrow_item.qty_requested)} units, but got assignments for {format_quantity(total_to_assign)}"
             )
 
         from systems.inventory.models import InventoryBatch
 
-        validated_batches: list[tuple[InventoryBatch, int]] = []
+        validated_batches: list[tuple[InventoryBatch, Decimal]] = []
         for batch_id, qty in aggregated_assignments.items():
             batch = session.exec(
                 select(InventoryBatch).where(
@@ -1242,7 +1278,9 @@ class BorrowService(
                 raise ValueError(f"Batch {batch_id} not found for item {item_id}")
 
             if batch.available_qty < qty:
-                raise ValueError(f"Batch {batch_id} only has {batch.available_qty} available")
+                raise ValueError(
+                    f"Batch {batch_id} only has {format_quantity(batch.available_qty)} available"
+                )
 
             validated_batches.append((batch, qty))
 
@@ -1317,6 +1355,11 @@ class BorrowService(
             item = self.inventory_service.get(session, item_req.item_id)
             if not item:
                 raise ValueError(f"Item {item_req.item_id} not found")
+            if item.is_trackable:
+                require_whole_quantity(
+                    item_req.qty_requested,
+                    field_name=f"qty_requested for trackable item '{item.item_id}'",
+                )
 
             items_by_id[item_req.item_id] = item
 
@@ -1605,7 +1648,7 @@ class BorrowService(
                     self.inventory_service.adjust_stock(
                         session,
                         item.item_id,
-                        -1,
+                        -TRACKABLE_UNIT_QUANTITY,
                         movement_type="borrow_release",
                         reference_id=db_request.request_id,
                         reference_type="borrow_request",
@@ -1788,10 +1831,10 @@ class BorrowService(
                     session.add(assignment)
 
                     movement_type = "borrow_return"
-                    qty_change = 1
+                    qty_change = TRACKABLE_UNIT_QUANTITY
                     if status_on_return == "maintenance":
                         movement_type = "maintenance"
-                        qty_change = 0
+                        qty_change = ZERO_QUANTITY
 
                     self.inventory_service.adjust_stock(
                         session,
@@ -1821,7 +1864,7 @@ class BorrowService(
                         )
                         if qty_returned > ba.qty_assigned:
                             raise ValueError(
-                                f"Returned quantity for batch {ba.batch_id} cannot exceed assigned quantity {ba.qty_assigned}"
+                                f"Returned quantity for batch {ba.batch_id} cannot exceed assigned quantity {format_quantity(ba.qty_assigned)}"
                             )
 
                         ba.returned_at = get_now_manila()

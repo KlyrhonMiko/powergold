@@ -25,6 +25,7 @@ export interface InventoryItem {
   status_condition?: string;
   item_type?: string;
   classification?: string;
+  unit_of_measure?: string | null;
   is_trackable?: boolean;
   description?: string;
   active_borrows?: PublicActiveBorrow[];
@@ -36,6 +37,7 @@ export interface InventoryItemCreate {
   category?: string;
   item_type?: string;
   classification?: string;
+  unit_of_measure?: string;
   is_trackable?: boolean;
   description?: string;
 }
@@ -70,6 +72,7 @@ export interface InventoryBatch {
   status: string;
   received_at: string;
   description?: string;
+  inventory_id?: string;
 }
 
 export interface InventoryBatchCreate {

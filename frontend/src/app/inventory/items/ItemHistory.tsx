@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { inventoryApi, InventoryMovement } from './api';
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatQuantity } from '@/lib/inventoryQuantity';
 
 interface ItemHistoryProps {
   itemId: string;
@@ -59,7 +60,7 @@ export function ItemHistory({ itemId, onClose }: ItemHistoryProps) {
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`text-sm font-bold ${move.qty_change > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                          {move.qty_change > 0 ? '+' : ''}{move.qty_change} units
+                          {move.qty_change > 0 ? '+' : ''}{formatQuantity(move.qty_change)} change
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded-md bg-secondary border border-border uppercase font-bold tracking-tighter">
                           {move.movement_type.replace('_', ' ')}

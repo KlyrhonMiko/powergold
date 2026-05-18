@@ -1,7 +1,10 @@
+from decimal import Decimal
 from datetime import datetime
 from uuid import UUID
+from sqlalchemy import Column, Numeric, text
 from sqlmodel import Field
 from core.base_model import BaseModel
+from systems.inventory.quantity import ZERO_QUANTITY
 from utils.time_utils import get_now_manila
 
 class InventoryBatch(BaseModel, table=True):
@@ -10,8 +13,16 @@ class InventoryBatch(BaseModel, table=True):
     batch_id: str = Field(unique=True, index=True, max_length=50)
     inventory_uuid: UUID = Field(foreign_key="inventory.id", index=True)
     
-    total_qty: int = Field(default=0, ge=0)
-    available_qty: int = Field(default=0, ge=0)
+    total_qty: Decimal = Field(
+        default=ZERO_QUANTITY,
+        ge=0,
+        sa_column=Column(Numeric(18, 3), nullable=False, server_default=text("0")),
+    )
+    available_qty: Decimal = Field(
+        default=ZERO_QUANTITY,
+        ge=0,
+        sa_column=Column(Numeric(18, 3), nullable=False, server_default=text("0")),
+    )
     
     expiration_date: datetime | None = Field(default=None, index=True, nullable=True)
     

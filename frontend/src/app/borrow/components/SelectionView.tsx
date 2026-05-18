@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { BorrowCatalogItem } from '../api';
 import { CartItem } from '../lib/types';
 import { formatCategoryLabel } from '../lib/utils';
+import { formatQuantity, formatQuantityWithUnit } from '@/lib/inventoryQuantity';
 import {
   Search,
   ShoppingCart,
@@ -230,7 +231,7 @@ export function SelectionView({
                     >
                       {inCart && (
                         <div className="absolute -top-2 -right-2 lg:-top-2.5 lg:-right-2.5 w-6 h-6 lg:w-7 lg:h-7 rounded-full bg-primary text-primary-foreground text-[10px] lg:text-xs font-bold flex items-center justify-center shadow-md shadow-primary/30 animate-in zoom-in-50 duration-200">
-                          {inCart.cartQty}
+                          {formatQuantity(inCart.cartQty)}
                         </div>
                       )}
 
@@ -257,7 +258,7 @@ export function SelectionView({
                             className={`font-bold text-lg lg:text-xl leading-none ${outOfStock ? 'text-destructive' : 'text-foreground'
                               }`}
                           >
-                            {item.available_qty}
+                            {formatQuantity(item.available_qty)}
                           </p>
                         </div>
 
@@ -333,7 +334,7 @@ export function SelectionView({
 
                     <div className="flex items-center justify-between">
                       <p className="text-[11px] text-muted-foreground font-medium">
-                        {item.available_qty} available
+                        {formatQuantityWithUnit(item.available_qty, item.unit_of_measure)} available
                       </p>
                       <div className="flex items-center bg-background rounded-xl border shadow-sm">
                         <button
@@ -343,7 +344,7 @@ export function SelectionView({
                           <Minus className="w-4 h-4" />
                         </button>
                         <span className="w-10 text-center text-sm font-semibold tabular-nums">
-                          {item.cartQty}
+                          {formatQuantity(item.cartQty)}
                         </span>
                         <button
                           onClick={() => onUpdateCartQty(item.item_id, 1)}
@@ -365,7 +366,7 @@ export function SelectionView({
               <div>
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Items</span>
               </div>
-              <span className="text-3xl font-bold leading-none tabular-nums">{totalCartItems}</span>
+              <span className="text-3xl font-bold leading-none tabular-nums">{formatQuantity(totalCartItems)}</span>
             </div>
 
             <button
@@ -428,7 +429,7 @@ export function SelectionView({
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.name}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{item.available_qty} available</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{formatQuantityWithUnit(item.available_qty, item.unit_of_measure)} available</p>
                   </div>
                   <div className="flex items-center bg-background rounded-lg border shadow-sm shrink-0">
                     <button
@@ -437,7 +438,7 @@ export function SelectionView({
                     >
                       <Minus className="w-3.5 h-3.5" />
                     </button>
-                    <span className="w-7 text-center text-xs font-semibold tabular-nums">{item.cartQty}</span>
+                    <span className="w-7 text-center text-xs font-semibold tabular-nums">{formatQuantity(item.cartQty)}</span>
                     <button
                       onClick={() => onUpdateCartQty(item.item_id, 1)}
                       className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-r-lg hover:bg-muted transition-colors"
@@ -470,7 +471,7 @@ export function SelectionView({
                     <ShoppingCart className="w-5 h-5 text-primary" />
                   </div>
                   <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center shadow-sm">
-                    {totalCartItems}
+                    {formatQuantity(totalCartItems)}
                   </div>
                 </div>
                 <div className="text-left min-w-0">

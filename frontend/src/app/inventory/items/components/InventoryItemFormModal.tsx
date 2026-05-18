@@ -1,13 +1,10 @@
 'use client';
 
-import { useState } from 'react';
 import type { InventoryItem, ConfigRead } from '../api';
 import type { InventoryItemFormData } from '../lib/inventoryItemForm';
-import { ChevronDown, Package, X, Check } from 'lucide-react';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Package, X } from 'lucide-react';
 import { FormSelect } from '@/components/ui/form-select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { cn } from '@/lib/utils';
 
 export function InventoryItemFormModal({
   editingItem,
@@ -15,6 +12,7 @@ export function InventoryItemFormModal({
   classifications,
   itemTypes,
   categories,
+  unitOfMeasures,
   onClose,
   onSubmit,
   setFormData,
@@ -25,6 +23,7 @@ export function InventoryItemFormModal({
   classifications: ConfigRead[];
   itemTypes: ConfigRead[];
   categories: ConfigRead[];
+  unitOfMeasures: ConfigRead[];
   onClose: () => void;
   onSubmit: (e: React.FormEvent) => void | Promise<void>;
   setFormData: React.Dispatch<React.SetStateAction<InventoryItemFormData>>;
@@ -44,9 +43,9 @@ export function InventoryItemFormModal({
             <Package className="w-4.5 h-4.5" />
           </div>
           <div className="flex-1">
-            <h2 className="text-lg font-bold font-heading">{editingItem ? 'Edit Equipment' : 'Add New Equipment'}</h2>
+            <h2 className="text-lg font-bold font-heading">{editingItem ? 'Edit Inventory Item' : 'Add New Inventory Item'}</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {editingItem ? 'Update the details for this equipment' : 'Fill in the details to add equipment to your catalog'}
+              {editingItem ? 'Update the details for this inventory item' : 'Fill in the details to add an item to your catalog'}
             </p>
           </div>
           <button
@@ -65,7 +64,7 @@ export function InventoryItemFormModal({
         <form onSubmit={onSubmit} className="p-5 space-y-4">
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground">
-              Equipment Name <span className="text-rose-500">*</span>
+              Item Name <span className="text-rose-500">*</span>
             </label>
             <input
               required
@@ -108,13 +107,26 @@ export function InventoryItemFormModal({
             placeholder="Select type"
           />
 
+          {!formData.is_trackable && (
+            <FormSelect
+              label="Unit Of Measure"
+              value={formData.unit_of_measure}
+              onChange={(v) => setFormData({ ...formData, unit_of_measure: v })}
+              options={[
+                { key: '', label: 'Select unit of measure' },
+                ...unitOfMeasures.map((u) => ({ key: u.key, label: u.value })),
+              ]}
+              placeholder="Select unit of measure"
+            />
+          )}
+
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-foreground">Description</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full h-20 p-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all resize-none"
-              placeholder="Optional notes about this equipment..."
+              placeholder="Optional notes about this inventory item..."
             />
           </div>
 
@@ -122,7 +134,13 @@ export function InventoryItemFormModal({
             <label className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border/50 cursor-pointer hover:bg-muted/60 transition-colors">
               <Checkbox
                 checked={formData.is_trackable}
-                onCheckedChange={(checked: boolean | "indeterminate") => setFormData({ ...formData, is_trackable: checked === true })}
+                onCheckedChange={(checked: boolean | "indeterminate") =>
+                  setFormData({
+                    ...formData,
+                    is_trackable: checked === true,
+                    unit_of_measure: checked === true ? '' : formData.unit_of_measure,
+                  })
+                }
               />
               <div>
                 <p className="text-sm font-medium text-foreground font-heading leading-none">Track individual units</p>

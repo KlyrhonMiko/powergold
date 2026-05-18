@@ -12,6 +12,7 @@ export interface BorrowRequest {
     qty_requested: number;
     classification?: string;
     item_type?: string;
+    unit_of_measure?: string | null;
     is_trackable?: boolean;
   }>;
   status: string;
@@ -129,6 +130,7 @@ export interface BorrowRequestBatch {
   batch_id: string;
   item_id?: string;
   item_name?: string;
+  unit_of_measure?: string | null;
   qty_assigned: number;
   qty_returned?: number;
   qty_not_returned?: number;
@@ -141,6 +143,7 @@ export interface ReleaseReceiptItem {
   item_id: string;
   name: string;
   classification?: string;
+  unit_of_measure?: string | null;
   is_trackable?: boolean;
   qty_released: number;
   qty_returned?: number;
