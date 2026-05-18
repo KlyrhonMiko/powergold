@@ -13,14 +13,12 @@ from fastapi.responses import StreamingResponse
 
 from core.models.audit_log import AuditLog
 from systems.inventory.models.borrow_request import BorrowRequest
-from systems.inventory.models.borrow_request_event import BorrowRequestEvent
 from systems.inventory.models.borrow_request_item import BorrowRequestItem
 from systems.inventory.models.borrow_request_unit import BorrowRequestUnit
 from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
 from systems.inventory.models.inventory import InventoryItem
 from systems.inventory.models.inventory_unit import InventoryUnit
 from systems.inventory.models.inventory_batch import InventoryBatch
-from systems.inventory.models.inventory_movement import InventoryMovement
 from systems.inventory.schemas.import_export_schemas import TimelineMode
 from systems.inventory.quantity import format_quantity
 from utils.time_utils import normalize_time_window
@@ -740,10 +738,6 @@ class ExportService:
                 include_deleted=include_deleted,
                 include_archived=include_archived,
             )
-
-        from systems.admin.models.user import User
-
-        from systems.admin.models.user import User
 
         from systems.admin.models.user import User
         headers = [

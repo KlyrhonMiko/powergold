@@ -310,7 +310,7 @@ def test_borrow_history_csv_contains_simplified_rows(
     export_service: ExportService,
     session: Session,
 ) -> None:
-    ids = _seed_export_fixture_data(session)
+    _seed_export_fixture_data(session)
 
     response = export_service._export_borrow_history_v2(
         session=session,

@@ -7,10 +7,8 @@ from sqlmodel import Session, SQLModel, create_engine, select
 
 from systems.admin.models.user import User
 from systems.admin.services.audit_service import audit_service
-from systems.inventory.models.borrow_participant import BorrowParticipant
 from systems.inventory.models.borrow_request import BorrowRequest
 from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
-from systems.inventory.models.borrow_request_event import BorrowRequestEvent
 from systems.inventory.models.borrow_request_item import BorrowRequestItem
 from systems.inventory.models.borrow_request_unit import BorrowRequestUnit
 from systems.inventory.models.inventory import InventoryItem

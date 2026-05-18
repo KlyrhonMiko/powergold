@@ -17,7 +17,6 @@ from systems.inventory.quantity import (
     ZERO_QUANTITY,
     format_quantity,
     parse_quantity,
-    quantize_quantity,
     require_whole_quantity,
 )
 from systems.inventory.models.inventory import InventoryItem
@@ -477,7 +476,6 @@ class ImportService:
 
         # --- duplicate-in-file detection ---
         duplicate_in_file_count = 0
-        identical_row_in_file = False
         same_serial_in_file = False
         if serial_str:
             duplicate_in_file_count = sum(
@@ -584,7 +582,7 @@ class ImportService:
                 requires_user_decision = True
                 status = RowStatus.ERROR
                 target_match_summary = f"Serial '{serial_str}' appears {duplicate_in_file_count} times in this file."
-                stock_interpretation = f"Serial appears multiple times in file — needs review."
+                stock_interpretation = "Serial appears multiple times in file — needs review."
                 issues.append(RowIssue(
                     field="serial_number", code="duplicate_serial_in_file",
                     severity="error",
@@ -832,9 +830,9 @@ class ImportService:
         if idx < 0 or idx >= len(ps.parsed_csv.rows):
             return None
 
-        for field, value in field_updates.items():
-            if field in ps.parsed_csv.headers:
-                ps.parsed_csv.rows[idx][field] = value
+        for field_name, value in field_updates.items():
+            if field_name in ps.parsed_csv.headers:
+                ps.parsed_csv.rows[idx][field_name] = value
 
         updated_preview = self.build_row_preview(
             session, row_number, ps.parsed_csv.rows[idx], ps.mode, ps.parsed_csv.rows
@@ -1104,7 +1102,6 @@ class ImportService:
 
         filename = ps.filename
         actor_id = ps.actor_id
-        mode = ps.mode
         rows = ps.parsed_csv.rows
 
         history = ImportHistory(
@@ -1611,11 +1608,11 @@ class ImportService:
 
         all_vals = [cat, cls, typ, uom]
         results = {}
-        for field, category in mapping.items():
-            results[field] = None
+        for field_name, category in mapping.items():
+            results[field_name] = None
             for val in all_vals:
                 if val and self.inventory_service.config_service.exists(session, val, category):
-                    results[field] = val
+                    results[field_name] = val
                     break
 
         if results.get("item_type"):
@@ -1655,11 +1652,11 @@ class ImportService:
 
         all_vals = [cat_before, cls_before, typ_before, uom_before]
         results = {}
-        for field, category in mapping.items():
-            results[field] = None
+        for field_name, category in mapping.items():
+            results[field_name] = None
             for val in all_vals:
                 if val and self.inventory_service.config_service.exists(session, val, category):
-                    results[field] = val
+                    results[field_name] = val
                     break
 
         issues: list[RowIssue] = []
