@@ -7,6 +7,9 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 ENV_DIR="$SCRIPT_DIR/env"
 CERT_DIR="$SCRIPT_DIR/certificates"
 IMAGES_DIR="$SCRIPT_DIR/images"
+DATABASE_IMAGES_DIR="$IMAGES_DIR/database"
+UTILS_IMAGES_DIR="$IMAGES_DIR/utils"
+SYSTEM_IMAGES_DIR="$IMAGES_DIR/system"
 BACKUPS_DIR="$SCRIPT_DIR/backups"
 LOGS_DIR="$SCRIPT_DIR/logs"
 DB_COMPOSE_FILE="$SCRIPT_DIR/compose/docker-compose.yml"
@@ -71,7 +74,15 @@ need_command() {
 }
 
 ensure_dirs() {
-  mkdir -p "$ENV_DIR" "$CERT_DIR" "$IMAGES_DIR" "$BACKUPS_DIR" "$LOGS_DIR"
+  mkdir -p \
+    "$ENV_DIR" \
+    "$CERT_DIR" \
+    "$IMAGES_DIR" \
+    "$DATABASE_IMAGES_DIR" \
+    "$UTILS_IMAGES_DIR" \
+    "$SYSTEM_IMAGES_DIR" \
+    "$BACKUPS_DIR" \
+    "$LOGS_DIR"
 }
 
 random_string() {
@@ -201,20 +212,19 @@ check_images_present() {
 }
 
 load_images() {
-  local loaded=0
+  local loaded=0 tarfile fname
 
   printf 'Loading Docker images...\n'
-  for tarfile in "$IMAGES_DIR"/*.tar; do
-    [[ -f "$tarfile" ]] || continue
-    local fname
-    fname="$(basename "$tarfile")"
+  while IFS= read -r tarfile; do
+    [[ -n "$tarfile" ]] || continue
+    fname="${tarfile#$IMAGES_DIR/}"
     printf '  Loading: %s\n' "$fname"
     docker load -i "$tarfile" || {
       printf 'ERROR: Failed to load %s\n' "$fname" >&2
       exit 1
     }
     loaded=1
-  done
+  done < <(find "$IMAGES_DIR" -type f -name '*.tar' | sort)
 
   if [[ "$loaded" -eq 0 ]]; then
     printf 'No image tars found in %s.\n' "$IMAGES_DIR" >&2
@@ -228,8 +238,8 @@ install_bundle() {
   need_command ip
   ensure_dirs
   generate_env_files 0
-  generate_certificates 0
   load_images
+  generate_certificates 0
   validate_bundle
   printf 'Bundle install preparation complete.\n'
 }
@@ -258,15 +268,17 @@ build_images() {
   docker pull postgres:15-alpine
   docker pull adminer:4.8.1-standalone
   docker pull caddy:2.8-alpine
+  docker pull alpine:3.21
 
   printf '[4/4] Exporting images...\n'
-  rm -f "$IMAGES_DIR"/*.tar
-  docker save -o "$IMAGES_DIR/postgres-15-alpine.tar" postgres:15-alpine
-  docker save -o "$IMAGES_DIR/adminer-4.8.1-standalone.tar" adminer:4.8.1-standalone
-  docker save -o "$IMAGES_DIR/caddy-2.8-alpine.tar" caddy:2.8-alpine
-  docker save -o "$IMAGES_DIR/powergold-bootstrap-$version.tar" "powergold-bootstrap:$version"
-  docker save -o "$IMAGES_DIR/powergold-backend-$version.tar" "powergold-backend:$version"
-  docker save -o "$IMAGES_DIR/powergold-frontend-$version.tar" "powergold-frontend:$version"
+  find "$IMAGES_DIR" -type f -name '*.tar' -delete
+  docker save -o "$DATABASE_IMAGES_DIR/postgres-15-alpine.tar" postgres:15-alpine
+  docker save -o "$UTILS_IMAGES_DIR/adminer-4.8.1-standalone.tar" adminer:4.8.1-standalone
+  docker save -o "$UTILS_IMAGES_DIR/caddy-2.8-alpine.tar" caddy:2.8-alpine
+  docker save -o "$UTILS_IMAGES_DIR/alpine-3.21.tar" alpine:3.21
+  docker save -o "$SYSTEM_IMAGES_DIR/powergold-bootstrap-$version.tar" "powergold-bootstrap:$version"
+  docker save -o "$SYSTEM_IMAGES_DIR/powergold-backend-$version.tar" "powergold-backend:$version"
+  docker save -o "$SYSTEM_IMAGES_DIR/powergold-frontend-$version.tar" "powergold-frontend:$version"
 
   printf 'Images exported to %s\n' "$IMAGES_DIR"
 }

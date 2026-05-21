@@ -15,10 +15,12 @@ Each release should ship a complete, versioned deployment bundle containing:
 3. `VERSION`
 4. `compose/`
 5. `scripts/`
-6. `images/*.tar`
-7. `env/.env.local.template`
-8. `env/.env.deploy.template`
-9. `infra/caddy/Caddyfile`
+6. `images/database/*.tar`
+7. `images/utils/*.tar`
+8. `images/system/*.tar`
+9. `env/.env.local.template`
+10. `env/.env.deploy.template`
+11. `infra/caddy/Caddyfile`
 
 This keeps deployment behavior, health checks, startup flow, and images in sync.
 
@@ -44,6 +46,12 @@ These bundle files should be overwritten by the new release:
 5. `README_CLIENT.md`
 6. `VERSION`
 7. `powergold.bat`
+
+Within `images/`, the current standard layout is:
+
+1. `images/database/` for database images such as Postgres
+2. `images/utils/` for utility and infrastructure images such as Caddy, Alpine, and Adminer
+3. `images/system/` for PowerGold application images such as bootstrap, backend, and frontend
 
 ## Recommended Client Update Flow
 
@@ -95,7 +103,7 @@ For each release:
 
 1. Update the app version in `deployment/VERSION`.
 2. Build the app images for that version.
-3. Export the app and third-party images into `deployment/images/`.
+3. Export the image archives into `deployment/images/database/`, `deployment/images/utils/`, and `deployment/images/system/`.
 4. Ensure deployment scripts and compose files reflect the intended runtime behavior.
 5. Package the clean deployment bundle.
 6. Smoke-test the bundle from a fresh extracted folder before shipping it.
@@ -118,7 +126,7 @@ Rollback should normally use:
 
 Before shipping a new bundle:
 
-1. `images/` contains all expected image tar files.
+1. `images/database/`, `images/utils/`, and `images/system/` contain the expected image tar files.
 2. `VERSION` matches the application image tar version.
 3. The zip does not contain:
    - `env/.env.local`

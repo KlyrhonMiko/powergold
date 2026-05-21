@@ -15,6 +15,9 @@ function Get-BundleContext {
     return @{
         BundleRoot = $bundleRoot
         ImagesDir = Join-Path $bundleRoot "images"
+        DatabaseImagesDir = Join-Path (Join-Path $bundleRoot "images") "database"
+        UtilsImagesDir = Join-Path (Join-Path $bundleRoot "images") "utils"
+        SystemImagesDir = Join-Path (Join-Path $bundleRoot "images") "system"
         EnvLocal = Join-Path $envDir ".env.local"
         EnvDeploy = Join-Path $envDir ".env.deploy"
         DbComposeFile = Join-Path $composeDir "docker-compose.yml"
@@ -225,6 +228,7 @@ function Get-ImageReferenceFromArchiveName {
         '^postgres-15-alpine\.tar$' { return 'postgres:15-alpine' }
         '^adminer-4\.8\.1-standalone\.tar$' { return 'adminer:4.8.1-standalone' }
         '^caddy-2\.8-alpine\.tar$' { return 'caddy:2.8-alpine' }
+        '^alpine-3\.21\.tar$' { return 'alpine:3.21' }
         '^powergold-bootstrap-' { return "powergold-bootstrap:$Version" }
         '^powergold-backend-' { return "powergold-backend:$Version" }
         '^powergold-frontend-' { return "powergold-frontend:$Version" }
@@ -240,7 +244,23 @@ function Test-BundleThirdPartyImage {
     return $Image -in @(
         "postgres:15-alpine",
         "adminer:4.8.1-standalone",
-        "caddy:2.8-alpine"
+        "caddy:2.8-alpine",
+        "alpine:3.21"
+    )
+}
+
+function Get-BundleImageArchives {
+    param(
+        [string]$ImageDir
+    )
+
+    if (-not (Test-Path $ImageDir)) {
+        return @()
+    }
+
+    return @(
+        Get-ChildItem -Path $ImageDir -Filter "*.tar" -File -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object FullName
     )
 }
 
@@ -249,12 +269,8 @@ function Get-ArchiveBundleVersion {
         [string]$ImagesDir
     )
 
-    if (-not (Test-Path $ImagesDir)) {
-        return $null
-    }
-
     $versions = @(
-        Get-ChildItem -Path $ImagesDir -Filter "powergold-*.tar" -ErrorAction SilentlyContinue |
+        Get-BundleImageArchives -ImageDir $ImagesDir |
             ForEach-Object {
                 if ($_.BaseName -match '^powergold-(bootstrap|backend|frontend)-') {
                     $_.BaseName -replace '^powergold-(bootstrap|backend|frontend)-', ''

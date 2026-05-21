@@ -32,7 +32,8 @@ if (Test-Path $StagingDir) {
 $dirs = @(
     "$StagingDir", "$StagingDir\compose", "$StagingDir\env",
     "$StagingDir\infra\caddy", "$StagingDir\certificates",
-    "$StagingDir\images", "$StagingDir\scripts", "$StagingDir\backups",
+    "$StagingDir\images", "$StagingDir\images\database", "$StagingDir\images\utils",
+    "$StagingDir\images\system", "$StagingDir\scripts", "$StagingDir\backups",
     "$StagingDir\logs"
 )
 foreach ($d in $dirs) {
@@ -56,15 +57,17 @@ Write-Host "[3/9] Pulling third-party images..." -ForegroundColor Cyan
 docker pull postgres:15-alpine
 docker pull adminer:4.8.1-standalone
 docker pull caddy:2.8-alpine
+docker pull alpine:3.21
 Write-Host "  Third-party images pulled." -ForegroundColor Green
 
 Write-Host "[4/9] Exporting images to tar archives..." -ForegroundColor Cyan
-docker save -o "$StagingDir\images\postgres-15-alpine.tar" postgres:15-alpine
-docker save -o "$StagingDir\images\adminer-4.8.1-standalone.tar" adminer:4.8.1-standalone
-docker save -o "$StagingDir\images\caddy-2.8-alpine.tar" caddy:2.8-alpine
-docker save -o "$StagingDir\images\powergold-bootstrap-$Version.tar" "powergold-bootstrap:$Version"
-docker save -o "$StagingDir\images\powergold-backend-$Version.tar" "powergold-backend:$Version"
-docker save -o "$StagingDir\images\powergold-frontend-$Version.tar" "powergold-frontend:$Version"
+docker save -o "$StagingDir\images\database\postgres-15-alpine.tar" postgres:15-alpine
+docker save -o "$StagingDir\images\utils\adminer-4.8.1-standalone.tar" adminer:4.8.1-standalone
+docker save -o "$StagingDir\images\utils\caddy-2.8-alpine.tar" caddy:2.8-alpine
+docker save -o "$StagingDir\images\utils\alpine-3.21.tar" alpine:3.21
+docker save -o "$StagingDir\images\system\powergold-bootstrap-$Version.tar" "powergold-bootstrap:$Version"
+docker save -o "$StagingDir\images\system\powergold-backend-$Version.tar" "powergold-backend:$Version"
+docker save -o "$StagingDir\images\system\powergold-frontend-$Version.tar" "powergold-frontend:$Version"
 Write-Host "  Images exported." -ForegroundColor Green
 
 Write-Host "[5/9] Copying compose files..." -ForegroundColor Cyan
@@ -120,7 +123,7 @@ Write-Host "Smoke-test the bundle by extracting the zip on a Windows machine"
 Write-Host "and running: .\scripts\install.ps1"
 Write-Host ""
 Write-Host "Image tars included:"
-Get-ChildItem "$StagingDir\images" -Filter "*.tar" | ForEach-Object {
+Get-ChildItem "$StagingDir\images" -Filter "*.tar" -Recurse | ForEach-Object {
     $sizeMB = [math]::Round($_.Length / 1MB, 1)
     Write-Host "  $($_.Name) ($sizeMB MB)"
 }

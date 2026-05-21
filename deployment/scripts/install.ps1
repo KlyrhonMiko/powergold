@@ -71,19 +71,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "[4/7] Generating certificates..." -ForegroundColor Cyan
-& "$ScriptDir\generate-cert.ps1"
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "WARNING: Certificate generation failed. You can run generate-cert.ps1 later." -ForegroundColor Yellow
-}
-
-Write-Host ""
 if (-not $SkipImageLoad) {
-    Write-Host "[5/7] Loading Docker images..." -ForegroundColor Cyan
-    $tarFiles = Get-ChildItem -Path $Context.ImagesDir -Filter "*.tar" -ErrorAction SilentlyContinue
+    Write-Host "[4/7] Loading Docker images..." -ForegroundColor Cyan
+    $tarFiles = Get-BundleImageArchives -ImageDir $Context.ImagesDir
     if (-not $tarFiles) {
         Write-Host "ERROR: No image archives found in $($Context.ImagesDir)" -ForegroundColor Red
-        Write-Host "Place the bundle .tar files in images/ and re-run install.ps1." -ForegroundColor Yellow
+        Write-Host "Place the bundle .tar files under images\database, images\utils, or images\system and re-run install.ps1." -ForegroundColor Yellow
         exit 1
     } else {
         $archiveVersion = Get-ArchiveBundleVersion -ImagesDir $Context.ImagesDir
@@ -133,7 +126,14 @@ if (-not $SkipImageLoad) {
         Write-Host "  Images loaded." -ForegroundColor Green
     }
 } else {
-    Write-Host "[5/7] Skipping image load (--SkipImageLoad)" -ForegroundColor Yellow
+    Write-Host "[4/7] Skipping image load (--SkipImageLoad)" -ForegroundColor Yellow
+}
+
+Write-Host ""
+Write-Host "[5/7] Generating certificates..." -ForegroundColor Cyan
+& "$ScriptDir\generate-cert.ps1"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: Certificate generation failed. You can run generate-cert.ps1 later." -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -159,7 +159,7 @@ $missingImages = Test-BundleImagesPresent -Context $Context
 if ($missingImages.Count -gt 0) {
     Write-Host "ERROR: Required Docker images are missing for bundle version $($Context.Version):" -ForegroundColor Red
     $missingImages | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-    Write-Host "Run install.ps1 without --SkipImageLoad, or place the correct .tar files in images/." -ForegroundColor Yellow
+    Write-Host "Run install.ps1 without --SkipImageLoad, or place the correct .tar files under the images\ tree." -ForegroundColor Yellow
     exit 1
 }
 Write-Host "  Compose configuration is valid." -ForegroundColor Green

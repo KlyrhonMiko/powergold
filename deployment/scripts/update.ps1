@@ -24,17 +24,17 @@ $currentVersion = if ($Context.Version) { $Context.Version } else { "unknown" }
 $previousVersion = $Context.Version
 Write-Host "Current bundle version: $currentVersion" -ForegroundColor White
 
-$newTars = Get-ChildItem -Path $ImageDir -Filter "*.tar" -ErrorAction SilentlyContinue
+$newTars = Get-BundleImageArchives -ImageDir $ImageDir
 if (-not $newTars) {
     Write-Host "No image archives found in $ImageDir" -ForegroundColor Yellow
-    Write-Host "Place the update .tar files in the images/ directory and run again." -ForegroundColor Yellow
+    Write-Host "Place the update .tar files under images\database, images\utils, or images\system and run again." -ForegroundColor Yellow
     exit 0
 }
 
 $targetVersion = Get-ArchiveBundleVersion -ImagesDir $ImageDir
 if (-not $targetVersion) {
     Write-Host "ERROR: Could not determine the PowerGold application version from the image archives." -ForegroundColor Red
-    Write-Host "Expected files like powergold-backend-<version>.tar in the images directory." -ForegroundColor Yellow
+    Write-Host "Expected files like images\system\powergold-backend-<version>.tar in the selected image directory tree." -ForegroundColor Yellow
     exit 1
 }
 

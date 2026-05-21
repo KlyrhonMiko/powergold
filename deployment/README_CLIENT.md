@@ -78,7 +78,7 @@ Backups created from the admin UI and scheduled backups also use this same `back
 When you receive an update from the PowerGold team:
 
 1. Extract the update package over the existing PowerGold folder.
-2. Let it overwrite `images\`, `scripts\`, `compose\`, `infra\`, `README_CLIENT.md`, and `VERSION`.
+2. Let it overwrite `images\database\`, `images\utils\`, `images\system\`, `scripts\`, `compose\`, `infra\`, `README_CLIENT.md`, and `VERSION`.
 3. Keep your existing `env\`, `certificates\`, and `backups\` folders.
 4. Run the update script:
    ```powershell
@@ -88,6 +88,7 @@ When you receive an update from the PowerGold team:
 
 Updates **do not** delete your database or uploaded files.
 The update process uses the bundle version shipped with the package so new scripts, compose changes, and images stay in sync.
+The `images\system\` folder holds the PowerGold application images, while `images\database\` and `images\utils\` hold shared infrastructure images.
 
 The shipped bundle does not include generated `env` secrets or generated certificates. Those are created locally when you run **Install** for the first time.
 
