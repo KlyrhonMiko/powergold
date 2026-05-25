@@ -12,15 +12,16 @@ Each release should ship a complete, versioned deployment bundle containing:
 
 1. `powergold.bat`
 2. `README_CLIENT.md`
-3. `VERSION`
-4. `compose/`
-5. `scripts/`
-6. `images/database/*.tar`
-7. `images/utils/*.tar`
-8. `images/system/*.tar`
-9. `env/.env.local.template`
-10. `env/.env.deploy.template`
-11. `infra/caddy/Caddyfile`
+3. `CHANGELOG.md`
+4. `VERSION`
+5. `compose/`
+6. `scripts/`
+7. `images/database/*.tar`
+8. `images/utils/*.tar`
+9. `images/system/*.tar`
+10. `env/.env.local.template`
+11. `env/.env.deploy.template`
+12. `infra/caddy/Caddyfile`
 
 This keeps deployment behavior, health checks, startup flow, and images in sync.
 
@@ -44,8 +45,9 @@ These bundle files should be overwritten by the new release:
 3. `compose/`
 4. `infra/`
 5. `README_CLIENT.md`
-6. `VERSION`
-7. `powergold.bat`
+6. `CHANGELOG.md`
+7. `VERSION`
+8. `powergold.bat`
 
 Within `images/`, the current standard layout is:
 

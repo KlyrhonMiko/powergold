@@ -26,6 +26,7 @@
    ```powershell
    .\powergold.bat
    ```
+   The bundle also includes `Powergold Enterprise Logo.png` beside the launcher for branding/reference.
 6. Choose **Install** from the menu.
    This generates fresh secrets on the client machine, creates local certificates, and loads Docker images.
 7. Run the launcher again and choose **Start**.
@@ -91,6 +92,7 @@ The update process uses the bundle version shipped with the package so new scrip
 The `images\system\` folder holds the PowerGold application images, while `images\database\` and `images\utils\` hold shared infrastructure images.
 
 The shipped bundle does not include generated `env` secrets or generated certificates. Those are created locally when you run **Install** for the first time.
+The shipped bundle includes `CHANGELOG.md` so operators can see the release notes that correspond to the delivered bundle.
 
 For the full deployment update policy used by the PowerGold team, see `UPDATE_PROCESS.md`.
 

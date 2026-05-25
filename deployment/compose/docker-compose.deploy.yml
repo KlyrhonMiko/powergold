@@ -2,7 +2,7 @@ name: powergold-deployment
 
 services:
   bootstrap:
-    image: powergold-bootstrap:${POWERGOLD_VERSION:-1.0.0}
+    image: powergold-bootstrap:${POWERGOLD_VERSION:?POWERGOLD_VERSION must be set from deployment/VERSION}
     env_file:
       - ../env/.env.deploy
     environment:
@@ -16,7 +16,7 @@ services:
     command: ["python", "data/bootstrap_system.py"]
 
   backend:
-    image: powergold-backend:${POWERGOLD_VERSION:-1.0.0}
+    image: powergold-backend:${POWERGOLD_VERSION:?POWERGOLD_VERSION must be set from deployment/VERSION}
     restart: unless-stopped
     env_file:
       - ../env/.env.deploy
@@ -62,7 +62,7 @@ services:
       start_period: 20s
 
   frontend:
-    image: powergold-frontend:${POWERGOLD_VERSION:-1.0.0}
+    image: powergold-frontend:${POWERGOLD_VERSION:?POWERGOLD_VERSION must be set from deployment/VERSION}
     restart: unless-stopped
     env_file:
       - ../env/.env.deploy

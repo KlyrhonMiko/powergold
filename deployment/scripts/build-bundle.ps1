@@ -15,7 +15,7 @@ $DeploymentDir = Join-Path $RepoRoot "deployment"
 if ($OutputDir) {
     $StagingDir = $OutputDir
 } else {
-    $StagingDir = Join-Path $RepoRoot ".build" "powergold-bundle-v$Version"
+    $StagingDir = Join-Path $RepoRoot ".build" "powergold"
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
@@ -87,6 +87,8 @@ if (Test-Path "$StagingDir\scripts\build-bundle.ps1") {
     Remove-Item "$StagingDir\scripts\build-bundle.ps1"
 }
 Copy-Item "$DeploymentDir\powergold.bat" "$StagingDir\powergold.bat"
+Copy-Item "$DeploymentDir\Powergold Enterprise Logo.png" "$StagingDir\Powergold Enterprise Logo.png"
+Copy-Item "$DeploymentDir\CHANGELOG.md" "$StagingDir\CHANGELOG.md"
 Copy-Item "$DeploymentDir\README_CLIENT.md" "$StagingDir\README_CLIENT.md"
 Copy-Item "$DeploymentDir\UPDATE_PROCESS.md" "$StagingDir\UPDATE_PROCESS.md"
 
@@ -104,7 +106,7 @@ REQUIRES=Docker Desktop
 Set-Content -Path "$StagingDir\BUNDLE_INFO.txt" -Value $metadata
 
 Write-Host "[9/9] Creating zip archive..." -ForegroundColor Cyan
-$zipPath = Join-Path $RepoRoot ".build" "powergold-bundle-v$Version.zip"
+$zipPath = Join-Path $RepoRoot ".build" "powergold-v$Version.zip"
 New-Item -ItemType Directory -Force -Path (Split-Path $zipPath) | Out-Null
 if (Test-Path $zipPath) { Remove-Item $zipPath }
 

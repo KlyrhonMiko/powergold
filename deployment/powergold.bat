@@ -3,6 +3,7 @@ setlocal
 
 set "ROOT=%~dp0"
 set "PS=powershell.exe -NoProfile -ExecutionPolicy Bypass"
+title PowerGold Enterprise
 
 if /I "%~1"=="install" goto install
 if /I "%~1"=="start" goto start
@@ -22,7 +23,7 @@ if not "%~1"=="" goto usage
 :menu
 cls
 echo ========================================
-echo   PowerGold Launcher
+echo   PowerGold Enterprise
 echo ========================================
 echo.
 echo   1. Install

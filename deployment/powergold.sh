@@ -336,7 +336,7 @@ package_bundle() {
   local version="${1:-$(get_version)}"
   local build_dir zip_path
   build_dir="$REPO_ROOT/.build"
-  zip_path="$build_dir/powergold-deployment-v$version.zip"
+  zip_path="$build_dir/powergold-v$version.zip"
 
   printf 'Refreshing deployment images for version %s...\n' "$version"
   build_images "$version"
