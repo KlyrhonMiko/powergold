@@ -23,7 +23,7 @@ class UserCreate(UserBase):
     first_name: str = Field(..., max_length=100)
     last_name: str = Field(..., max_length=100)
 
-    email: EmailStr = Field(..., max_length=255)
+    email: EmailStr | None = Field(default=None, max_length=255)
 
     username: str = Field(..., max_length=50)
     password: Optional[str] = Field(default=None, min_length=6, max_length=255)

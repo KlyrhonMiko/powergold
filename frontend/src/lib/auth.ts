@@ -4,7 +4,7 @@ import { tokenStore } from '@/lib/tokenStore';
 export interface User {
   user_id: string;
   username: string;
-  email: string;
+  email?: string | null;
   first_name: string;
   last_name: string;
   middle_name?: string;

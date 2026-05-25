@@ -3,7 +3,7 @@ import { api, buildQueryString } from '@/lib/api';
 export interface User {
   user_id: string; // Display ID (e.g. USER-XXXXXX)
   username: string;
-  email: string;
+  email?: string | null;
   first_name: string;
   last_name: string;
   middle_name?: string;
@@ -44,7 +44,7 @@ export interface UserLoginPasswordResetRequest {
 
 export interface UserCreate {
   username: string;
-  email: string;
+  email?: string;
   password?: string;
   first_name: string;
   last_name: string;

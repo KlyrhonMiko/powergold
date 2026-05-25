@@ -26,7 +26,7 @@ class User(BaseModel, table=True):
     first_name: str = Field(max_length=100)
     middle_name: str | None = Field(default=None, max_length=100)
 
-    email: str = Field(index=True, max_length=255)
+    email: str | None = Field(default=None, index=True, max_length=255)
     contact_number: str | None = Field(default=None, max_length=20)
 
     username: str = Field(index=True, max_length=50)

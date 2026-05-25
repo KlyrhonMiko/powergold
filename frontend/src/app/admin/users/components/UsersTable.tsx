@@ -84,7 +84,7 @@ export function UsersTable({
                 <p className="text-sm font-medium text-foreground truncate">
                   {user.first_name} {user.last_name}
                 </p>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email}</p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5">{user.email || 'No email'}</p>
               </div>
             </div>
 
@@ -169,7 +169,7 @@ export function UsersTable({
                   <p className="text-sm font-medium text-foreground">
                     {user.first_name} {user.last_name}
                   </p>
-                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                  <p className="text-xs text-muted-foreground">{user.email || 'No email'}</p>
                 </div>
               </div>
 

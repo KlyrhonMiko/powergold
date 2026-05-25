@@ -99,7 +99,7 @@ export default function ProfilePage() {
     };
 
     const handleSave = async () => {
-        const isEmailChanged = (formData.email || '').trim() !== user?.email;
+        const isEmailChanged = (formData.email || '').trim() !== (user?.email || '');
         const isUsernameChanged = (formData.username || '').trim() !== user?.username;
         const requiresCurrentPassword = isEmailChanged || isUsernameChanged;
 

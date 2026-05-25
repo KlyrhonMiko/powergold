@@ -151,6 +151,7 @@ export function UserModal({
     setLoading(true);
     try {
       const employeeId = (formData.employee_id || '').trim();
+      const email = toOptionalText(formData.email);
       const pin = (formData.password || '').trim();
       const effectiveRole = formData.role || user?.role;
       const enforcePasswordRules = !isRolePasswordPolicyExempt(effectiveRole);
@@ -173,10 +174,11 @@ export function UserModal({
           return;
         }
 
-        const { password: _password, ...formDataWithoutPassword } = formData;
+        const { password: _password, email: _email, ...formDataWithoutPassword } = formData;
         const updateData: EditableUserUpdate = {
           ...formDataWithoutPassword,
           username: employeeId || effectiveUsername,
+          ...(email ? { email } : {}),
           ...(employeeId ? { employee_id: employeeId } : {}),
           ...(isPasswordChangeEnabled ? { password: pin, change_password: true } : {}),
         };
@@ -210,12 +212,12 @@ export function UserModal({
 
         const createPayload: UserCreate = {
           username: employeeId,
-          email: formData.email,
           first_name: formData.first_name,
           last_name: formData.last_name,
           role: formData.role,
           shift_type: formData.shift_type,
           employee_id: employeeId,
+          ...(email ? { email } : {}),
           ...(middleName ? { middle_name: middleName } : {}),
           ...(contactNumber ? { contact_number: contactNumber } : {}),
           ...(isBorrowerRole ? { password: pin } : {}),
@@ -455,10 +457,10 @@ export function UserModal({
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-muted-foreground uppercase mb-1.5 ml-1">Email Address</label>
+                      <label className="block text-[11px] font-bold text-muted-foreground uppercase mb-1.5 ml-1">Email Address (Optional)</label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/40" />
-                        <input required type="email" name="email" value={formData.email} onChange={handleChange} className={inputWithIconClassName} />
+                        <input type="email" name="email" value={formData.email} onChange={handleChange} className={inputWithIconClassName} />
                       </div>
                     </div>
                     <div>

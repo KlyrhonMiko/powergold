@@ -71,6 +71,10 @@ vi.mock('lucide-react', () => {
     User: Icon,
     Mail: Icon,
     Phone: Icon,
+    Shield: Icon,
+    Key: Icon,
+    Smartphone: Icon,
+    Loader2: Icon,
     Edit3: Icon,
     Save: Icon,
     X: Icon,
@@ -112,8 +116,8 @@ describe('inventory profile two-factor enrollment', () => {
     });
 
     expect(mocks.getTwoFactorStatus).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('Not enabled')).toBeInTheDocument();
+    expect(screen.getByText('Protect your account with an additional security layer')).toBeInTheDocument();
 
-    expect(screen.getByText('Set up two-factor authentication')).toBeInTheDocument();
+    expect(screen.getByText('Setup Authenticator')).toBeInTheDocument();
   });
 });
