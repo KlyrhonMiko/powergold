@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShieldCheck, CheckCircle2, X, Delete, Loader2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { posApi, BorrowCatalogItem } from './api';
@@ -20,7 +21,6 @@ import {
 import { SelectionView } from './components/SelectionView';
 import { CheckoutView } from './components/CheckoutView';
 import { parseQuantityInput } from '@/lib/inventoryQuantity';
-import { formatCategoryLabel } from './lib/utils';
 
 interface BorrowerTaxonomyData {
   categories: ConfigRead[];
@@ -30,6 +30,7 @@ interface BorrowerTaxonomyData {
 type BorrowItemKind = 'trackable' | 'untrackable';
 
 export default function BorrowPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   useInventoryWebSocket();
   const [search, setSearch] = useState('');
@@ -49,12 +50,12 @@ export default function BorrowPage() {
   const [step, setStep] = useState<'selection' | 'checkout'>('selection');
   const [success, setSuccess] = useState(false);
   const [submittedByEmployeeName, setSubmittedByEmployeeName] = useState<string | null>(null);
-  const [selectedItemKind, setSelectedItemKind] = useState<BorrowItemKind | null>(null);
+  const [selectedItemKind] = useState<BorrowItemKind>('trackable');
 
   const { data: items = [], isLoading: isLoadingCatalog } = useQuery({
     queryKey: ['borrow', 'catalog'],
     queryFn: async () => {
-      const res = await posApi.listCatalog({ per_page: 200 });
+      const res = await posApi.listCatalog({ fetch_all: true });
       return res.data;
     },
   });
@@ -68,19 +69,17 @@ export default function BorrowPage() {
     refetchInterval: 300000, // 5 minutes for taxonomy
   });
 
-  const categoryConfigs = taxonomy?.categories || [];
-  const classificationConfigs = taxonomy?.classifications || [];
   const loading = isLoadingCatalog;
 
   const categoryLabels = useMemo(() => {
-    return Object.fromEntries(categoryConfigs.map((category) => [category.key, category.value]));
-  }, [categoryConfigs]);
+    return Object.fromEntries((taxonomy?.categories ?? []).map((category) => [category.key, category.value]));
+  }, [taxonomy?.categories]);
 
   const classificationLabels = useMemo(() => {
     return Object.fromEntries(
-      classificationConfigs.map((classification) => [classification.key, classification.value]),
+      (taxonomy?.classifications ?? []).map((classification) => [classification.key, classification.value]),
     );
-  }, [classificationConfigs]);
+  }, [taxonomy?.classifications]);
 
   const categories = useMemo(() => {
     const cats = new Set(items.map((i) => i.category).filter(Boolean));
@@ -92,12 +91,7 @@ export default function BorrowPage() {
   const filteredItems = useMemo(
     () =>
       items.filter((i) => {
-        const matchesKind =
-          selectedItemKind === null
-            ? false
-            : selectedItemKind === 'trackable'
-              ? i.is_trackable
-              : !i.is_trackable;
+        const matchesKind = selectedItemKind === 'trackable' ? i.is_trackable : !i.is_trackable;
         const matchesSearch =
           i.name.toLowerCase().includes(search.toLowerCase()) ||
           i.category.toLowerCase().includes(search.toLowerCase());
@@ -116,11 +110,17 @@ export default function BorrowPage() {
       if (existing) {
         return prev.map((i) =>
           i.item_id === item.item_id
-            ? { ...i, cartQty: parseQuantityInput(String(i.cartQty + step), step) }
+            ? {
+              ...i,
+              cartQty: Math.min(
+                parseQuantityInput(String(i.cartQty + step), step),
+                Math.max(i.available_qty, step),
+              ),
+            }
             : i,
         );
       }
-      return [...prev, { ...item, cartQty: step }];
+      return [...prev, { ...item, cartQty: Math.min(step, Math.max(item.available_qty, step)) }];
     });
   };
 
@@ -131,7 +131,7 @@ export default function BorrowPage() {
           const step = 1;
           const newQty = parseQuantityInput(String(i.cartQty + delta * step), 0);
           if (newQty > 0) {
-            return { ...i, cartQty: newQty };
+            return { ...i, cartQty: Math.min(newQty, i.available_qty) };
           }
         }
         return i;
@@ -155,20 +155,6 @@ export default function BorrowPage() {
     setIsPinModalOpen(false);
     setIsPinVerifying(false);
     setPinDraft('');
-  };
-
-  const handleSelectItemKind = (kind: BorrowItemKind) => {
-    setSelectedItemKind(kind);
-    setSearch('');
-    setSelectedCategory('All');
-  };
-
-  const handleBackToItemKindSelection = () => {
-    handleClear();
-    setStep('selection');
-    setSelectedItemKind(null);
-    setSearch('');
-    setSelectedCategory('All');
   };
 
   const pinInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -402,8 +388,7 @@ export default function BorrowPage() {
           categoryLabels={categoryLabels}
           classificationLabels={classificationLabels}
           selectedItemKind={selectedItemKind}
-          onSelectItemKind={handleSelectItemKind}
-          onBackToItemKindSelection={handleBackToItemKindSelection}
+          onBack={() => router.push('/auth/login')}
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
           totalItems={items.length}

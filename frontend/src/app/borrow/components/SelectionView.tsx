@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import type { BorrowCatalogItem } from '../api';
 import { CartItem } from '../lib/types';
 import { formatCategoryLabel } from '../lib/utils';
@@ -28,9 +27,8 @@ interface SelectionViewProps {
   categories: string[];
   categoryLabels: Record<string, string>;
   classificationLabels: Record<string, string>;
-  selectedItemKind: 'trackable' | 'untrackable' | null;
-  onSelectItemKind: (kind: 'trackable' | 'untrackable') => void;
-  onBackToItemKindSelection: () => void;
+  selectedItemKind: 'trackable' | 'untrackable';
+  onBack: () => void;
   selectedCategory: string;
   onCategoryChange: (v: string) => void;
   totalItems: number;
@@ -52,8 +50,7 @@ export function SelectionView({
   categoryLabels,
   classificationLabels,
   selectedItemKind,
-  onSelectItemKind,
-  onBackToItemKindSelection,
+  onBack,
   selectedCategory,
   onCategoryChange,
   totalItems,
@@ -66,57 +63,6 @@ export function SelectionView({
   onProceed,
 }: SelectionViewProps) {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
-
-  if (!selectedItemKind) {
-    return (
-      <div className="mx-auto w-full max-w-4xl rounded-3xl border bg-card p-8 md:p-14 shadow-xl animate-in zoom-in-95 duration-500">
-        <div className="text-center max-w-xl mx-auto">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-6">
-            <Package2 className="w-8 h-8 text-primary" />
-          </div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Borrowing Module</h1>
-          <p className="mt-3 text-base text-muted-foreground leading-relaxed">
-            Please select the type of items you need. We've separated our inventory to help you find what you need faster.
-          </p>
-          <div className="mt-6">
-            <Link
-              href="/auth/login"
-              className="inline-flex items-center gap-2 rounded-xl border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-accent hover:shadow-sm"
-            >
-              Sign in
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-12 grid gap-6 md:grid-cols-2">
-          <button
-            onClick={() => onSelectItemKind('trackable')}
-            className="group relative flex flex-col items-center text-center rounded-3xl border bg-background p-8 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:bg-primary/5 active:scale-[0.98]"
-          >
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-              <Package2 className="w-7 h-7" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground">Equipments</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Trackable assets that require return (e.g., Tools, Electronics, Gear)</p>
-            <div className="mt-6 text-xs font-bold text-primary uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Select Equipments</div>
-          </button>
-
-          <button
-            onClick={() => onSelectItemKind('untrackable')}
-            className="group relative flex flex-col items-center text-center rounded-3xl border bg-background p-8 transition-all hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg hover:bg-primary/5 active:scale-[0.98]"
-          >
-            <div className="w-14 h-14 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform">
-              <Package2 className="w-7 h-7" />
-            </div>
-            <h3 className="text-xl font-bold text-foreground">Materials</h3>
-            <p className="mt-2 text-sm text-muted-foreground">Untrackable or consumable items (e.g., Supplies, Components, Parts)</p>
-            <div className="mt-6 text-xs font-bold text-orange-600 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Select Materials</div>
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const selectedKindLabel = selectedItemKind === 'trackable' ? 'Equipments' : 'Materials';
 
@@ -143,9 +89,9 @@ export function SelectionView({
                   {selectedKindLabel}
                 </span>
                 <button
-                  onClick={onBackToItemKindSelection}
+                  onClick={onBack}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  title="Back to item type selection (this will reset your current borrow request)"
+                  title="Back to sign in"
                 >
                   <Undo2 className="h-3.5 w-3.5" />
                   Back
@@ -217,13 +163,14 @@ export function SelectionView({
                 {items.map((item) => {
                   const inCart = cart.find((c) => c.item_id === item.item_id);
                   const outOfStock = item.available_qty <= 0;
+                  const atStockLimit = Boolean(inCart && inCart.cartQty >= item.available_qty);
                   return (
                     <button
                       key={item.item_id}
                       onClick={() => onAddToCart(item)}
-                      disabled={outOfStock}
+                      disabled={outOfStock || atStockLimit}
                       className={`group relative flex flex-col text-left p-3 lg:p-4 rounded-xl border bg-card transition-all duration-200
-                        ${outOfStock
+                        ${outOfStock || atStockLimit
                           ? 'opacity-40 cursor-not-allowed grayscale'
                           : 'hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/30 active:translate-y-0 active:shadow-md active:scale-[0.98]'
                         }
@@ -263,7 +210,11 @@ export function SelectionView({
                         </div>
 
                         {!outOfStock && (
-                          <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg lg:rounded-xl flex items-center justify-center bg-muted/60 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-md transition-all duration-200">
+                          <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg lg:rounded-xl flex items-center justify-center transition-all duration-200 ${
+                            atStockLimit
+                              ? 'bg-muted/60 text-muted-foreground'
+                              : 'bg-muted/60 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-md'
+                          }`}>
                             <Plus className="w-4 h-4 lg:w-5 lg:h-5" />
                           </div>
                         )}
@@ -317,7 +268,9 @@ export function SelectionView({
               </div>
             ) : (
               <div className="space-y-3">
-                {cart.map((item) => (
+                {cart.map((item) => {
+                  const atStockLimit = item.cartQty >= item.available_qty;
+                  return (
                   <div
                     key={item.item_id}
                     className="flex flex-col gap-3 p-4 rounded-xl border bg-muted/20 hover:bg-muted/30 transition-colors animate-in slide-in-from-right-2 duration-200"
@@ -348,14 +301,16 @@ export function SelectionView({
                         </span>
                         <button
                           onClick={() => onUpdateCartQty(item.item_id, 1)}
-                          className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-r-xl hover:bg-muted transition-colors"
+                          disabled={atStockLimit}
+                          className="w-10 h-10 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-r-xl hover:bg-muted transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                         >
                           <Plus className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -422,7 +377,9 @@ export function SelectionView({
 
             {/* Cart items */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              {cart.map((item) => (
+              {cart.map((item) => {
+                const atStockLimit = item.cartQty >= item.available_qty;
+                return (
                 <div
                   key={item.item_id}
                   className="flex items-center gap-3 p-3 rounded-xl border bg-muted/20"
@@ -441,7 +398,8 @@ export function SelectionView({
                     <span className="w-7 text-center text-xs font-semibold tabular-nums">{formatQuantity(item.cartQty)}</span>
                     <button
                       onClick={() => onUpdateCartQty(item.item_id, 1)}
-                      className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-r-lg hover:bg-muted transition-colors"
+                      disabled={atStockLimit}
+                      className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground rounded-r-lg hover:bg-muted transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -453,7 +411,8 @@ export function SelectionView({
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

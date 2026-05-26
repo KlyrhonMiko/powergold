@@ -440,7 +440,18 @@ export function RequestsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left">
+      <table className="w-full table-fixed text-left">
+        <colgroup>
+          <col className="w-8" />
+          <col className="w-24" />
+          <col className="w-[38%]" />
+          <col className="w-[16%]" />
+          <col className="w-20" />
+          <col className="w-28" />
+          <col className="w-32" />
+          <col className="w-36" />
+          <col className="w-56" />
+        </colgroup>
         <thead>
           <tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground font-medium">
             <th className="py-3 pl-5 w-8" />
@@ -514,7 +525,7 @@ export function RequestsTable({
                     </div>
                   </td>
 
-                  <td className="py-3.5 px-4">
+                  <td className="py-3.5 px-4 min-w-0">
                     <div className="min-w-0">
                       <p className="font-medium text-sm text-foreground truncate">
                         {record.items.map((item) => item.name || item.item_id).join(', ') || 'No Items'}
@@ -528,7 +539,7 @@ export function RequestsTable({
                     </div>
                   </td>
 
-                  <td className="py-3.5 px-4">
+                  <td className="py-3.5 px-4 min-w-0">
                     <div className="min-w-0">
                       {record.customer_name ? (
                         <p className="text-sm text-foreground truncate">{record.customer_name}</p>

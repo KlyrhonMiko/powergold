@@ -46,6 +46,7 @@ async def borrower_catalog(
     request: Request,
     page: int = Query(default=1, ge=1, description="Page number"),
     per_page: int = Query(default=20, ge=1, le=200, description="Records per page"),
+    fetch_all: bool = Query(default=False, description="Return the full borrower catalog without pagination"),
     search: Optional[str] = Query(default=None, description="Search by item name (case-insensitive)"),
     category: Optional[str] = Query(default=None, description="Filter by category (exact match)"),
     item_type: Optional[str] = Query(default=None, description="Filter by item type (e.g. equipment, consumable)"),
@@ -53,11 +54,12 @@ async def borrower_catalog(
     in_stock_only: bool = Query(default=False, description="Only include items with available stock"),
     session: Session = Depends(get_session),
 ):
-    skip = (page - 1) * per_page
+    skip = 0 if fetch_all else (page - 1) * per_page
+    limit = None if fetch_all else per_page
     items, total = inventory_service.get_catalog(
         session,
         skip=skip,
-        limit=per_page,
+        limit=limit,
         search=search,
         category=category,
         item_type=item_type,
@@ -77,7 +79,13 @@ async def borrower_catalog(
 
     return create_success_response(
         data=catalog_items,
-        meta=make_pagination_meta(total=total, skip=skip, limit=per_page, page=page, per_page=per_page),
+        meta=make_pagination_meta(
+            total=total,
+            skip=skip,
+            limit=total if fetch_all else per_page,
+            page=1 if fetch_all else page,
+            per_page=total if fetch_all else per_page,
+        ),
         request=request,
     )
 

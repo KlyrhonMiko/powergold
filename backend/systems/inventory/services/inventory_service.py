@@ -244,7 +244,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         self,
         session: Session,
         skip: int = 0,
-        limit: int = 100,
+        limit: Optional[int] = 100,
         search: Optional[str] = None,
         category: Optional[str] = None,
         item_type: Optional[str] = None,
@@ -301,9 +301,11 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         count_statement = select(func.count()).select_from(statement.subquery())
         total_count = session.exec(count_statement).one()
 
-        items = session.exec(
-            statement.order_by(InventoryItem.name.asc()).offset(skip).limit(limit)
-        ).all()
+        statement = statement.order_by(InventoryItem.name.asc()).offset(skip)
+        if limit is not None:
+            statement = statement.limit(limit)
+
+        items = session.exec(statement).all()
 
         return list(items), total_count
 

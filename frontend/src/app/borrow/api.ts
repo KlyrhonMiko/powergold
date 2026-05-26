@@ -19,6 +19,7 @@ export interface BorrowCatalogItem {
 interface BorrowCatalogParams {
   page?: number;
   per_page?: number;
+  fetch_all?: boolean;
   search?: string;
   category?: string;
   item_type?: string;
