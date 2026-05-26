@@ -1,5 +1,6 @@
 from datetime import datetime
 from uuid import UUID
+from sqlalchemy import Index
 from sqlmodel import Field
 from core.base_model import BaseModel
 from typing import TYPE_CHECKING
@@ -24,6 +25,21 @@ class InventoryUnit(BaseModel, table=True):
     
     condition: str | None = Field(default="good", max_length=100)
     description: str | None = Field(default=None, max_length=1000)
+
+    __table_args__ = (
+        Index(
+            "ix_inventory_units_item_status_active",
+            "inventory_uuid",
+            "is_deleted",
+            "status",
+        ),
+        Index(
+            "ix_inventory_units_item_serial_active",
+            "inventory_uuid",
+            "is_deleted",
+            "serial_number",
+        ),
+    )
 
     borrow_assignments: list["BorrowRequestUnit"] = Relationship(
         back_populates="inventory_unit",

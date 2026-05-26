@@ -12,13 +12,20 @@ from systems.inventory.models.borrow_request_item import BorrowRequestItem
 from systems.inventory.models.borrow_request_unit import BorrowRequestUnit
 from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
 from systems.inventory.models.inventory import InventoryItem
+from systems.inventory.models.inventory_batch import InventoryBatch
 from systems.inventory.models.inventory_movement import InventoryMovement
+from systems.inventory.models.inventory_unit import InventoryUnit
 from systems.inventory.schemas.borrow_request_schemas import (
+    AssignableBatchRead,
+    AssignableUnitRead,
     BorrowRequestBatchRead,
+    BorrowRequestAssignmentOptionItemRead,
+    BorrowRequestAssignmentOptionsRead,
     BorrowRequestBatchReturn,
     BorrowRequestCreate,
     BorrowRequestEventRead,
     BorrowRequestEventGlobalRead,
+    BorrowRequestItemAssignmentUpdate,
     BorrowRequestRead,
     BorrowRequestUnitReturn,
     BorrowRequestUpdate,
@@ -258,6 +265,294 @@ class BorrowService(
             for item in items
         }
 
+    def _build_batch_return_qty_map_by_request(
+        self,
+        session: Session,
+        request_ids: set[str],
+        batch_uuids: set[UUID],
+    ) -> dict[str, dict[UUID, Decimal]]:
+        if not request_ids or not batch_uuids:
+            return {}
+
+        return_movements = list(
+            session.exec(
+                select(
+                    InventoryMovement.reference_id,
+                    InventoryMovement.batch_uuid,
+                    InventoryMovement.qty_change,
+                    InventoryMovement.movement_id,
+                ).where(
+                    InventoryMovement.reference_id.in_(list(request_ids)),
+                    InventoryMovement.movement_type == "borrow_return",
+                    InventoryMovement.batch_uuid.in_(list(batch_uuids)),
+                )
+            ).all()
+        )
+        if not return_movements:
+            return {}
+
+        movement_ids = [movement_id for _, _, _, movement_id in return_movements if movement_id]
+        reversed_movement_ids: set[str] = set()
+        if movement_ids:
+            reversed_movement_ids = set(
+                ref_id
+                for ref_id in session.exec(
+                    select(InventoryMovement.reference_id).where(
+                        InventoryMovement.movement_type == "reversal",
+                        InventoryMovement.reference_id.in_(movement_ids),
+                    )
+                ).all()
+                if ref_id
+            )
+
+        qty_by_request: dict[str, dict[UUID, Decimal]] = {}
+        for reference_id, batch_uuid, qty_change, movement_id in return_movements:
+            if (
+                not reference_id
+                or batch_uuid is None
+                or movement_id in reversed_movement_ids
+            ):
+                continue
+            request_batch_map = qty_by_request.setdefault(reference_id, {})
+            request_batch_map[batch_uuid] = (
+                request_batch_map.get(batch_uuid, ZERO_QUANTITY)
+                + max(qty_change, ZERO_QUANTITY)
+            )
+
+        return qty_by_request
+
+    def _prepare_borrow_request_serialization(
+        self,
+        session: Session,
+        borrow_requests: list[BorrowRequest],
+    ) -> dict[str, Any]:
+        request_uuids = [request.id for request in borrow_requests if request.id is not None]
+        request_uuid_set = set(request_uuids)
+        request_id_by_uuid = {
+            request.id: request.request_id
+            for request in borrow_requests
+            if request.id is not None
+        }
+
+        request_items = list(
+            session.exec(
+                select(BorrowRequestItem)
+                .where(
+                    BorrowRequestItem.borrow_uuid.in_(request_uuids),
+                    BorrowRequestItem.is_deleted.is_(False),
+                )
+                .order_by(BorrowRequestItem.borrow_uuid.asc(), BorrowRequestItem.created_at.asc())
+            ).all()
+        ) if request_uuids else []
+
+        request_events = list(
+            session.exec(
+                select(BorrowRequestEvent)
+                .where(
+                    BorrowRequestEvent.borrow_uuid.in_(request_uuids),
+                    BorrowRequestEvent.is_deleted.is_(False),
+                )
+                .order_by(BorrowRequestEvent.borrow_uuid.asc(), BorrowRequestEvent.created_at.asc())
+            ).all()
+        ) if request_uuids else []
+
+        participants = list(
+            session.exec(
+                select(BorrowParticipant)
+                .where(
+                    BorrowParticipant.borrow_uuid.in_(request_uuids),
+                    BorrowParticipant.is_deleted.is_(False),
+                )
+                .order_by(BorrowParticipant.borrow_uuid.asc(), BorrowParticipant.created_at.asc())
+            ).all()
+        ) if request_uuids else []
+
+        assigned_units_rows = list(
+            session.exec(
+                select(BorrowRequestUnit, InventoryUnit)
+                .outerjoin(InventoryUnit, BorrowRequestUnit.unit_uuid == InventoryUnit.id)
+                .where(
+                    BorrowRequestUnit.borrow_uuid.in_(request_uuids),
+                    BorrowRequestUnit.is_deleted.is_(False),
+                )
+                .order_by(BorrowRequestUnit.borrow_uuid.asc(), BorrowRequestUnit.created_at.asc())
+            ).all()
+        ) if request_uuids else []
+
+        assigned_batch_rows = list(
+            session.exec(
+                select(BorrowRequestBatch, InventoryBatch)
+                .outerjoin(InventoryBatch, BorrowRequestBatch.batch_uuid == InventoryBatch.id)
+                .where(
+                    BorrowRequestBatch.borrow_uuid.in_(request_uuids),
+                    BorrowRequestBatch.is_deleted.is_(False),
+                )
+                .order_by(BorrowRequestBatch.borrow_uuid.asc(), BorrowRequestBatch.created_at.asc())
+            ).all()
+        ) if request_uuids else []
+
+        item_uuids = {item.item_uuid for item in request_items if item.item_uuid is not None}
+        batch_item_uuids = {
+            batch.inventory_uuid
+            for _, batch in assigned_batch_rows
+            if batch is not None and batch.inventory_uuid is not None
+        }
+        item_details_map = self._build_item_details_map(
+            session,
+            item_uuids | batch_item_uuids,
+        )
+
+        user_ids: set[UUID | None] = {
+            request.borrower_uuid for request in borrow_requests
+        } | {
+            request.closed_by for request in borrow_requests if request.closed_by is not None
+        }
+        user_ids.update(event.actor_id for event in request_events if event.actor_id is not None)
+        user_ids.update(
+            participant.user_uuid
+            for participant in participants
+            if participant.user_uuid is not None
+        )
+
+        user_id_map = self._build_user_id_map(session, user_ids)
+        user_name_map = self._build_user_name_map(session, user_ids)
+
+        request_items_map: dict[UUID, list[dict[str, Any]]] = {
+            request_uuid: []
+            for request_uuid in request_uuid_set
+        }
+        for request_item in request_items:
+            if request_item.borrow_uuid is None:
+                continue
+            item_details = item_details_map.get(request_item.item_uuid, {})
+            fallback_item_id = (
+                str(request_item.item_uuid)
+                if request_item.item_uuid is not None
+                else "UNKNOWN-ITEM"
+            )
+            request_items_map.setdefault(request_item.borrow_uuid, []).append(
+                {
+                    "item_id": item_details.get("item_id") or fallback_item_id,
+                    "name": item_details.get("name") or "Deleted Inventory Item",
+                    "classification": item_details.get("classification"),
+                    "item_type": item_details.get("item_type"),
+                    "is_trackable": item_details.get("is_trackable", False),
+                    "unit_of_measure": item_details.get("unit_of_measure"),
+                    "qty_requested": request_item.qty_requested,
+                }
+            )
+
+        request_events_map: dict[UUID, list[dict[str, Any]]] = {
+            request_uuid: []
+            for request_uuid in request_uuid_set
+        }
+        for event in request_events:
+            if event.borrow_uuid is None:
+                continue
+            request_events_map.setdefault(event.borrow_uuid, []).append(
+                {
+                    **event.model_dump(mode="json"),
+                    "actor_user_id": user_id_map.get(event.actor_id),
+                    "actor_name": user_name_map.get(event.actor_id, "System"),
+                }
+            )
+
+        request_participants_map: dict[UUID, list[dict[str, Any]]] = {
+            request_uuid: []
+            for request_uuid in request_uuid_set
+        }
+        for participant in participants:
+            if participant.borrow_uuid is None:
+                continue
+            request_participants_map.setdefault(participant.borrow_uuid, []).append(
+                {
+                    "user_id": user_id_map.get(participant.user_uuid),
+                    "name": participant.name,
+                    "fullname": user_name_map.get(participant.user_uuid) or participant.name,
+                    "role": participant.role_in_request,
+                }
+            )
+
+        request_assigned_units_map: dict[UUID, list[dict[str, Any]]] = {
+            request_uuid: []
+            for request_uuid in request_uuid_set
+        }
+        for assignment, inventory_unit in assigned_units_rows:
+            if assignment.borrow_uuid is None:
+                continue
+            request_assigned_units_map.setdefault(assignment.borrow_uuid, []).append(
+                {
+                    **assignment.model_dump(mode="json"),
+                    "unit_id": inventory_unit.unit_id if inventory_unit is not None else "",
+                    "serial_number": inventory_unit.serial_number if inventory_unit is not None else None,
+                }
+            )
+
+        batch_uuids = {
+            assignment.batch_uuid
+            for assignment, _ in assigned_batch_rows
+            if assignment.batch_uuid is not None
+        }
+        batch_return_qty_map = self._build_batch_return_qty_map_by_request(
+            session,
+            set(request_id_by_uuid.values()),
+            batch_uuids,
+        )
+
+        request_assigned_batches_map: dict[UUID, list[dict[str, Any]]] = {
+            request_uuid: []
+            for request_uuid in request_uuid_set
+        }
+        for assignment, inventory_batch in assigned_batch_rows:
+            if assignment.borrow_uuid is None:
+                continue
+            request_id = request_id_by_uuid.get(assignment.borrow_uuid)
+            qty_returned = ZERO_QUANTITY
+            if request_id and assignment.batch_uuid is not None:
+                qty_returned = batch_return_qty_map.get(request_id, {}).get(
+                    assignment.batch_uuid,
+                    assignment.qty_assigned if assignment.returned_at is not None else ZERO_QUANTITY,
+                )
+            request_assigned_batches_map.setdefault(assignment.borrow_uuid, []).append(
+                {
+                    **assignment.model_dump(mode="json"),
+                    "batch_id": inventory_batch.batch_id if inventory_batch is not None else None,
+                    "item_id": item_details_map.get(
+                        inventory_batch.inventory_uuid,
+                        {},
+                    ).get("item_id")
+                    if inventory_batch is not None
+                    else None,
+                    "item_name": item_details_map.get(
+                        inventory_batch.inventory_uuid,
+                        {},
+                    ).get("name")
+                    if inventory_batch is not None
+                    else None,
+                    "unit_of_measure": item_details_map.get(
+                        inventory_batch.inventory_uuid,
+                        {},
+                    ).get("unit_of_measure")
+                    if inventory_batch is not None
+                    else None,
+                    "qty_returned": qty_returned,
+                    "qty_not_returned": max(
+                        assignment.qty_assigned - qty_returned,
+                        ZERO_QUANTITY,
+                    ),
+                }
+            )
+
+        return {
+            "user_id_map": user_id_map,
+            "user_name_map": user_name_map,
+            "request_items_map": request_items_map,
+            "request_events_map": request_events_map,
+            "request_participants_map": request_participants_map,
+            "request_assigned_units_map": request_assigned_units_map,
+            "request_assigned_batches_map": request_assigned_batches_map,
+        }
+
     def get_all(
         self,
         session: Session,
@@ -381,117 +676,7 @@ class BorrowService(
     def serialize_borrow_request(
         self, session: Session, borrow_req: BorrowRequest
     ) -> BorrowRequestRead:
-        actor_ids = {
-            event.actor_id
-            for event in (borrow_req.events or [])
-            if event.actor_id is not None
-        }
-        actor_ids.add(borrow_req.borrower_uuid)
-        user_id_map = self._build_user_id_map(session, actor_ids)
-        borrower_name_map = self._build_user_name_map(session, {borrow_req.borrower_uuid})
-        actor_name_map = self._build_user_name_map(session, actor_ids)
-
-        # Get all items for this request
-        request_items = []
-        item_uuids = set()
-        if borrow_req.id:
-            request_items = session.exec(
-                select(BorrowRequestItem)
-                .where(
-                    BorrowRequestItem.borrow_uuid == borrow_req.id,
-                    BorrowRequestItem.is_deleted.is_(False),
-                )
-                .order_by(BorrowRequestItem.created_at.asc())
-            ).all()
-            item_uuids = {item.item_uuid for item in request_items if item.item_uuid}
-
-        item_details_map = self._build_item_details_map(session, item_uuids)
-        assigned_units = self._get_borrow_assignments(session, borrow_req)
-        assigned_batches: list[BorrowRequestBatch] = []
-        participants: list[BorrowParticipant] = []
-        if borrow_req.id:
-            assigned_batches = list(
-                session.exec(
-                    select(BorrowRequestBatch)
-                    .where(
-                        BorrowRequestBatch.borrow_uuid == borrow_req.id,
-                        BorrowRequestBatch.is_deleted.is_(False),
-                    )
-                    .order_by(BorrowRequestBatch.created_at.asc())
-                ).all()
-            )
-            participants = list(
-                session.exec(
-                    select(BorrowParticipant)
-                    .where(
-                        BorrowParticipant.borrow_uuid == borrow_req.id,
-                        BorrowParticipant.is_deleted.is_(False),
-                    )
-                    .order_by(BorrowParticipant.created_at.asc())
-                ).all()
-            )
-
-        participant_user_ids = {
-            participant.user_uuid for participant in participants if participant.user_uuid is not None
-        }
-        participant_user_id_map = self._build_user_id_map(session, participant_user_ids)
-        participant_name_map = self._build_user_name_map(session, participant_user_ids)
-
-        payload = borrow_req.model_dump(mode="json")
-        payload["borrower_user_id"] = user_id_map.get(borrow_req.borrower_uuid)
-        payload["borrower_name"] = borrower_name_map.get(borrow_req.borrower_uuid)
-        payload["closed_by_user_id"] = user_id_map.get(borrow_req.closed_by)
-
-        # Populate items list
-        payload_items = []
-        for item in request_items:
-            item_details = item_details_map.get(item.item_uuid, {})
-            fallback_item_id = str(item.item_uuid) if item.item_uuid else "UNKNOWN-ITEM"
-            payload_items.append(
-                {
-                    "item_id": item_details.get("item_id") or fallback_item_id,
-                    "name": item_details.get("name") or "Deleted Inventory Item",
-                    "classification": item_details.get("classification"),
-                    "item_type": item_details.get("item_type"),
-                    "is_trackable": item_details.get("is_trackable", False),
-                    "qty_requested": item.qty_requested,
-                }
-            )
-        payload["items"] = payload_items
-
-        # Remove legacy fields from payload
-        payload.pop("item_id", None)
-        payload.pop("qty_requested", None)
-
-        payload["events"] = [
-            {
-                **event.model_dump(mode="json"),
-                "actor_user_id": user_id_map.get(event.actor_id),
-                "actor_name": actor_name_map.get(event.actor_id, "System"),
-            }
-            for event in (borrow_req.events or [])
-        ]
-        payload["assigned_units"] = [
-            {
-                **assignment.model_dump(mode="json"),
-                "unit_id": assignment.unit_id,
-                "serial_number": assignment.serial_number,
-            }
-            for assignment in assigned_units
-        ]
-        payload["assigned_batches"] = self.serialize_assigned_batches(
-            session, borrow_req, assigned_batches=assigned_batches
-        )
-        payload["involved_people"] = [
-            {
-                "user_id": participant_user_id_map.get(participant.user_uuid),
-                "name": participant.name,
-                "fullname": participant_name_map.get(participant.user_uuid) or participant.name,
-                "role": participant.role_in_request,
-            }
-            for participant in participants
-        ] or None
-        return BorrowRequestRead.model_validate(payload)
+        return self.serialize_borrow_requests(session, [borrow_req])[0]
 
     def _build_batch_return_qty_map(
         self,
@@ -878,10 +1063,209 @@ class BorrowService(
         session: Session,
         borrow_requests: list[BorrowRequest],
     ) -> list[BorrowRequestRead]:
-        return [
-            self.serialize_borrow_request(session, request)
-            for request in borrow_requests
+        if not borrow_requests:
+            return []
+
+        context = self._prepare_borrow_request_serialization(session, borrow_requests)
+        serialized_requests: list[BorrowRequestRead] = []
+        for borrow_request in borrow_requests:
+            payload = borrow_request.model_dump(mode="json")
+            payload["borrower_user_id"] = context["user_id_map"].get(borrow_request.borrower_uuid)
+            payload["borrower_name"] = context["user_name_map"].get(borrow_request.borrower_uuid)
+            payload["closed_by_user_id"] = context["user_id_map"].get(borrow_request.closed_by)
+            payload["items"] = context["request_items_map"].get(borrow_request.id, [])
+            payload["events"] = context["request_events_map"].get(borrow_request.id, [])
+            payload["assigned_units"] = context["request_assigned_units_map"].get(
+                borrow_request.id,
+                [],
+            )
+            payload["assigned_batches"] = context["request_assigned_batches_map"].get(
+                borrow_request.id,
+                [],
+            )
+            payload["involved_people"] = (
+                context["request_participants_map"].get(borrow_request.id, []) or None
+            )
+            payload.pop("item_id", None)
+            payload.pop("qty_requested", None)
+            serialized_requests.append(BorrowRequestRead.model_validate(payload))
+
+        return serialized_requests
+
+    def get_assignment_options(
+        self,
+        session: Session,
+        request_id: str,
+    ) -> BorrowRequestAssignmentOptionsRead:
+        db_request = self.get(session, request_id)
+        if not db_request or db_request.id is None:
+            raise ValueError("Request not found")
+
+        request_items = list(
+            session.exec(
+                select(BorrowRequestItem)
+                .where(
+                    BorrowRequestItem.borrow_uuid == db_request.id,
+                    BorrowRequestItem.is_deleted.is_(False),
+                )
+                .order_by(BorrowRequestItem.created_at.asc())
+            ).all()
+        )
+        item_uuids = [item.item_uuid for item in request_items if item.item_uuid is not None]
+        item_details_map = self._build_item_details_map(session, set(item_uuids))
+
+        trackable_item_ids = [
+            item_uuid
+            for item_uuid in item_uuids
+            if item_details_map.get(item_uuid, {}).get("is_trackable")
         ]
+        non_trackable_item_ids = [
+            item_uuid
+            for item_uuid in item_uuids
+            if not item_details_map.get(item_uuid, {}).get("is_trackable")
+        ]
+
+        units_by_item: dict[UUID, list[AssignableUnitRead]] = {}
+        if trackable_item_ids:
+            unit_rows = session.exec(
+                select(
+                    InventoryUnit.inventory_uuid,
+                    InventoryUnit.unit_id,
+                    InventoryUnit.serial_number,
+                    InventoryUnit.condition,
+                ).where(
+                    InventoryUnit.inventory_uuid.in_(trackable_item_ids),
+                    InventoryUnit.is_deleted.is_(False),
+                    InventoryUnit.status == "available",
+                )
+                .order_by(InventoryUnit.inventory_uuid.asc(), InventoryUnit.serial_number.asc())
+            ).all()
+            for inventory_uuid, unit_id, serial_number, condition in unit_rows:
+                if inventory_uuid is None:
+                    continue
+                units_by_item.setdefault(inventory_uuid, []).append(
+                    AssignableUnitRead(
+                        unit_id=unit_id,
+                        serial_number=serial_number,
+                        condition=condition,
+                    )
+                )
+
+        batches_by_item: dict[UUID, list[AssignableBatchRead]] = {}
+        if non_trackable_item_ids:
+            batch_rows = session.exec(
+                select(
+                    InventoryBatch.inventory_uuid,
+                    InventoryBatch.batch_id,
+                    InventoryBatch.available_qty,
+                    InventoryBatch.expiration_date,
+                ).where(
+                    InventoryBatch.inventory_uuid.in_(non_trackable_item_ids),
+                    InventoryBatch.is_deleted.is_(False),
+                    InventoryBatch.status != "expired",
+                    InventoryBatch.available_qty > 0,
+                )
+                .order_by(InventoryBatch.inventory_uuid.asc(), InventoryBatch.received_at.desc())
+            ).all()
+            for inventory_uuid, batch_id, available_qty, expiration_date in batch_rows:
+                if inventory_uuid is None:
+                    continue
+                batches_by_item.setdefault(inventory_uuid, []).append(
+                    AssignableBatchRead(
+                        batch_id=batch_id,
+                        available_qty=available_qty,
+                        expiration_date=expiration_date,
+                    )
+                )
+
+        return BorrowRequestAssignmentOptionsRead(
+            request_id=db_request.request_id,
+            items=[
+                BorrowRequestAssignmentOptionItemRead(
+                    item_id=item_details_map.get(request_item.item_uuid, {}).get("item_id")
+                    or (str(request_item.item_uuid) if request_item.item_uuid else "UNKNOWN-ITEM"),
+                    name=item_details_map.get(request_item.item_uuid, {}).get("name")
+                    or "Deleted Inventory Item",
+                    qty_requested=request_item.qty_requested,
+                    unit_of_measure=item_details_map.get(request_item.item_uuid, {}).get("unit_of_measure"),
+                    is_trackable=bool(
+                        item_details_map.get(request_item.item_uuid, {}).get("is_trackable", False)
+                    ),
+                    available_units=units_by_item.get(request_item.item_uuid, []),
+                    available_batches=batches_by_item.get(request_item.item_uuid, []),
+                )
+                for request_item in request_items
+            ],
+        )
+
+    def assign_request_inventory(
+        self,
+        session: Session,
+        request_id: str,
+        assignments: list[BorrowRequestItemAssignmentUpdate],
+        actor_id: UUID,
+        note: str | None = None,
+    ) -> BorrowRequest:
+        db_request = self.get(session, request_id)
+        if not db_request:
+            raise ValueError("Request not found")
+
+        request_items = list(
+            session.exec(
+                select(BorrowRequestItem)
+                .where(
+                    BorrowRequestItem.borrow_uuid == db_request.id,
+                    BorrowRequestItem.is_deleted.is_(False),
+                )
+            ).all()
+        )
+        item_details_map = self._build_item_details_map(
+            session,
+            {request_item.item_uuid for request_item in request_items if request_item.item_uuid is not None},
+        )
+        request_items_by_item_id = {
+            item_details_map[request_item.item_uuid]["item_id"]: request_item
+            for request_item in request_items
+            if request_item.item_uuid is not None and request_item.item_uuid in item_details_map
+        }
+
+        for assignment in assignments:
+            request_item = request_items_by_item_id.get(assignment.item_id)
+            if request_item is None or request_item.item_uuid is None:
+                raise ValueError(f"Item {assignment.item_id} is not part of this borrow request")
+
+            item_details = item_details_map.get(request_item.item_uuid, {})
+            is_trackable = bool(item_details.get("is_trackable", False))
+            if is_trackable:
+                if assignment.batch_assignments:
+                    raise ValueError(
+                        f"Trackable item {assignment.item_id} does not accept batch assignments"
+                    )
+                self.assign_units(
+                    session,
+                    request_id=request_id,
+                    unit_ids=assignment.unit_ids,
+                    actor_id=actor_id,
+                    item_id=assignment.item_id,
+                    note=note,
+                )
+                continue
+
+            if assignment.unit_ids:
+                raise ValueError(
+                    f"Non-trackable item {assignment.item_id} does not accept unit assignments"
+                )
+            self.assign_batches(
+                session,
+                request_id=request_id,
+                batch_assignments=assignment.batch_assignments,
+                actor_id=actor_id,
+                item_id=assignment.item_id,
+                note=note,
+            )
+
+        session.flush()
+        return db_request
 
     def serialize_borrow_events(
         self,

@@ -14,7 +14,7 @@ export default function AdminDashboard() {
 
   const stats = data?.stats || null;
   const activity = data?.activity || [];
-  const userInsights = data?.userInsights || null;
+  const userInsights = data?.users || null;
   const registry = data?.registry || [];
 
   return (

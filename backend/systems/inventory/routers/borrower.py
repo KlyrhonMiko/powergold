@@ -27,6 +27,19 @@ class BorrowerTaxonomyRead(GenericResponse[dict[str, list[ConfigRead]]]):
     pass
 
 
+def _to_catalog_reads(session: Session, items: list) -> list[InventoryCatalogItemRead]:
+    condition_map = inventory_service.get_item_condition_map(session, items)
+    catalog_items: list[InventoryCatalogItemRead] = []
+    for item in items:
+        item_read = InventoryCatalogItemRead.model_validate(item)
+        item_read.total_qty = item.total_qty
+        item_read.available_qty = item.available_qty
+        item_read.condition = condition_map.get(item.id, "good")
+        item_read.status_condition = (item.status or "healthy").upper()
+        catalog_items.append(item_read)
+    return catalog_items
+
+
 @router.get("/taxonomy", response_model=GenericResponse[dict[str, list[ConfigRead]]])
 async def borrower_inventory_taxonomy(request: Request, session: Session = Depends(get_session)):
     categories = inventory_service.config_service.get_by_category(session, "inventory_category")
@@ -51,6 +64,7 @@ async def borrower_catalog(
     category: Optional[str] = Query(default=None, description="Filter by category (exact match)"),
     item_type: Optional[str] = Query(default=None, description="Filter by item type (e.g. equipment, consumable)"),
     classification: Optional[str] = Query(default=None, description="Filter by classification (exact match)"),
+    is_trackable: Optional[bool] = Query(default=None, description="Filter trackable/non-trackable items"),
     in_stock_only: bool = Query(default=False, description="Only include items with available stock"),
     session: Session = Depends(get_session),
 ):
@@ -64,18 +78,11 @@ async def borrower_catalog(
         category=category,
         item_type=item_type,
         classification=classification,
+        is_trackable=is_trackable,
         in_stock_only=in_stock_only,
     )
 
-    catalog_items = []
-    for item in items:
-        item_read = InventoryCatalogItemRead.model_validate(item)
-        balances = inventory_service.get_item_balances(session, item)
-        item_read.total_qty = balances["total_qty"]
-        item_read.available_qty = balances["available_qty"]
-        item_read.condition = inventory_service.get_item_condition(session, item)
-        item_read.status_condition = inventory_service.get_item_status(session, item)
-        catalog_items.append(item_read)
+    catalog_items = _to_catalog_reads(session, items)
 
     return create_success_response(
         data=catalog_items,

@@ -1,7 +1,7 @@
 from decimal import Decimal
 from datetime import datetime
 from uuid import UUID
-from sqlalchemy import Column, Numeric, text
+from sqlalchemy import Column, Index, Numeric, text
 from sqlmodel import Field
 from core.base_model import BaseModel
 from systems.inventory.quantity import ZERO_QUANTITY
@@ -31,3 +31,18 @@ class InventoryBatch(BaseModel, table=True):
     description: str | None = Field(default=None, max_length=1000)
     
     received_at: datetime = Field(default_factory=get_now_manila)
+
+    __table_args__ = (
+        Index(
+            "ix_inventory_batches_item_received_active",
+            "inventory_uuid",
+            "is_deleted",
+            "received_at",
+        ),
+        Index(
+            "ix_inventory_batches_item_available_active",
+            "inventory_uuid",
+            "is_deleted",
+            "available_qty",
+        ),
+    )

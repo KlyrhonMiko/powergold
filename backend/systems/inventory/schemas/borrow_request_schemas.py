@@ -224,6 +224,56 @@ class BorrowRequestBatchAssign(BaseModel):
     item_id: str
 
 
+class AssignableUnitRead(BaseModel):
+    unit_id: str
+    serial_number: Optional[str] = None
+    condition: Optional[str] = None
+
+
+class AssignableBatchRead(BaseModel):
+    batch_id: str
+    available_qty: NonNegativeQuantityDecimal
+    expiration_date: Optional[datetime] = None
+
+    @field_serializer("available_qty")
+    def serialize_available_qty(self, value):
+        return serialize_quantity(value)
+
+    @field_serializer("expiration_date")
+    def serialize_expiration_date(self, value: datetime | None) -> str | None:
+        return format_datetime(value) if value else None
+
+
+class BorrowRequestAssignmentOptionItemRead(BaseModel):
+    item_id: str
+    name: str
+    qty_requested: PositiveQuantityDecimal
+    unit_of_measure: Optional[str] = None
+    is_trackable: bool = False
+    available_units: list[AssignableUnitRead] = []
+    available_batches: list[AssignableBatchRead] = []
+
+    @field_serializer("qty_requested")
+    def serialize_qty_requested(self, value):
+        return serialize_quantity(value)
+
+
+class BorrowRequestAssignmentOptionsRead(BaseModel):
+    request_id: str
+    items: list[BorrowRequestAssignmentOptionItemRead]
+
+
+class BorrowRequestItemAssignmentUpdate(BaseModel):
+    item_id: str = Field(..., max_length=50)
+    unit_ids: list[str] = Field(default_factory=list)
+    batch_assignments: list[BorrowRequestBatchAssignment] = Field(default_factory=list)
+
+
+class BorrowRequestAssignmentsUpdate(BaseModel):
+    items: list[BorrowRequestItemAssignmentUpdate] = Field(min_length=1)
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
 class BatchItem(BaseModel):
     item_id: str
     qty_requested: PositiveQuantityDecimal

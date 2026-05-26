@@ -45,4 +45,11 @@ class InventoryItem(BaseModel, table=True):
             "ix_inventory_created_at",
             "created_at",
         ),
+        Index(
+            "ix_inventory_list_filters",
+            "is_deleted",
+            "is_archived",
+            "is_trackable",
+            "name",
+        ),
     )

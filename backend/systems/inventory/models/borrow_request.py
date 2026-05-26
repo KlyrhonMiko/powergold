@@ -88,4 +88,17 @@ class BorrowRequest(BaseModel, table=True):
                 "status IN ('pending', 'approved', 'released') AND is_deleted IS FALSE"
             ),
         ),
+        Index(
+            "ix_borrow_requests_list_filters",
+            "is_deleted",
+            "is_archived",
+            "status",
+            "request_date",
+        ),
+        Index(
+            "ix_borrow_requests_borrower_recent",
+            "borrower_uuid",
+            "is_deleted",
+            "request_date",
+        ),
     )

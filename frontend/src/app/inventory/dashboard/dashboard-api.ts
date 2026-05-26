@@ -1,6 +1,7 @@
 import { api } from '@/lib/api';
 
 import type {
+  InventoryDashboardOverview,
   DashboardStats,
   RecentTransaction,
   LowStockItem,
@@ -11,6 +12,7 @@ import type {
 } from './lib/types';
 
 export type {
+  InventoryDashboardOverview,
   DashboardStats,
   RecentTransaction,
   LowStockItem,
@@ -21,6 +23,7 @@ export type {
 } from './lib/types';
 
 export const dashboardApi = {
+  getOverview: () => api.get<InventoryDashboardOverview>('/inventory/dashboard/overview'),
   getStats: () => api.get<DashboardStats>('/inventory/dashboard/stats'),
   getRecent: () => api.get<RecentTransaction[]>('/inventory/dashboard/recent'),
   getLowStock: () => api.get<LowStockItem[]>('/inventory/dashboard/low-stock'),

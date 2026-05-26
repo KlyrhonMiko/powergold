@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import type { 
+  AdminDashboardOverview,
   AdminStats, 
   ActivityPoint, 
   UserInsights, 
@@ -7,6 +8,7 @@ import type {
 } from './lib/types';
 
 export const adminDashboardApi = {
+  getOverview: () => api.get<AdminDashboardOverview>('/admin/dashboard/overview'),
   getStats: () => api.get<AdminStats>('/admin/dashboard/stats'),
   getActivity: () => api.get<ActivityPoint[]>('/admin/dashboard/activity'),
   getUsers: () => api.get<UserInsights>('/admin/dashboard/users'),

@@ -30,3 +30,10 @@ export interface SystemRegistry {
   entity: string;
   count: number;
 }
+
+export interface AdminDashboardOverview {
+  stats: AdminStats;
+  activity: ActivityPoint[];
+  users: UserInsights;
+  registry: SystemRegistry[];
+}

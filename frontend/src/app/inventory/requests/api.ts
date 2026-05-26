@@ -102,6 +102,44 @@ export interface BorrowUnitAssignPayload {
   notes?: string;
 }
 
+export interface AssignableUnit {
+  unit_id: string;
+  serial_number?: string | null;
+  condition?: string | null;
+}
+
+export interface AssignableBatch {
+  batch_id: string;
+  available_qty: number;
+  expiration_date?: string | null;
+}
+
+export interface BorrowRequestAssignmentOptionItem {
+  item_id: string;
+  name: string;
+  qty_requested: number;
+  unit_of_measure?: string | null;
+  is_trackable: boolean;
+  available_units: AssignableUnit[];
+  available_batches: AssignableBatch[];
+}
+
+export interface BorrowRequestAssignmentOptions {
+  request_id: string;
+  items: BorrowRequestAssignmentOptionItem[];
+}
+
+export interface BorrowRequestItemAssignmentUpdate {
+  item_id: string;
+  unit_ids?: string[];
+  batch_assignments?: BorrowBatchAssignment[];
+}
+
+export interface BorrowRequestAssignmentsUpdatePayload {
+  items: BorrowRequestItemAssignmentUpdate[];
+  notes?: string;
+}
+
 export interface BorrowListParams {
   page?: number;
   per_page?: number;
@@ -214,6 +252,12 @@ export const borrowApi = {
 
   assignBatches: (id: string, payload: BorrowBatchAssignPayload) =>
     api.patch<BorrowRequestBatch[]>(`/inventory/borrowing/requests/${id}/assign-batches`, payload),
+
+  getAssignmentOptions: (id: string) =>
+    api.get<BorrowRequestAssignmentOptions>(`/inventory/borrowing/requests/${id}/assignment-options`),
+
+  assignInventory: (id: string, payload: BorrowRequestAssignmentsUpdatePayload) =>
+    api.patch<BorrowRequest>(`/inventory/borrowing/requests/${id}/assignments`, payload),
 
   getAssignedUnits: (id: string) =>
     api.get<BorrowRequestUnit[]>(`/inventory/borrowing/requests/${id}/units`),

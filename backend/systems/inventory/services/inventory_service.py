@@ -249,6 +249,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         category: Optional[str] = None,
         item_type: Optional[str] = None,
         classification: Optional[str] = None,
+        is_trackable: Optional[bool] = None,
         in_stock_only: bool = False,
     ) -> tuple[list[InventoryItem], int]:
         """Get borrower-facing inventory catalog items."""
@@ -265,6 +266,8 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             statement = statement.where(InventoryItem.item_type == item_type)
         if classification is not None:
             statement = statement.where(InventoryItem.classification == classification)
+        if is_trackable is not None:
+            statement = statement.where(InventoryItem.is_trackable == is_trackable)
 
         if in_stock_only:
             trackable_available_exists = (
@@ -460,6 +463,55 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             "total_qty": quantize_quantity(total_sum or ZERO_QUANTITY),
             "available_qty": quantize_quantity(available_sum or ZERO_QUANTITY),
         }
+
+    def get_item_condition_map(
+        self,
+        session: Session,
+        items: list[InventoryItem],
+    ) -> dict[UUID, str]:
+        if not items:
+            return {}
+
+        unit_cond_weights = self.config_service.get_weights(
+            session,
+            "inventory_units_condition_weights",
+        )
+        trackable_item_ids = [
+            item.id
+            for item in items
+            if item.is_trackable and item.id is not None
+        ]
+        condition_map: dict[UUID, str] = {
+            item.id: "good"
+            for item in items
+            if item.id is not None
+        }
+
+        if not trackable_item_ids:
+            return condition_map
+
+        units = session.exec(
+            select(
+                InventoryUnit.inventory_uuid,
+                InventoryUnit.condition,
+            ).where(
+                InventoryUnit.inventory_uuid.in_(trackable_item_ids),
+                InventoryUnit.is_deleted.is_(False),
+                InventoryUnit.status != "retired",
+            )
+        ).all()
+
+        max_weight_by_item: dict[UUID, int] = {item_id: 0 for item_id in trackable_item_ids}
+        for inventory_uuid, condition in units:
+            if inventory_uuid is None:
+                continue
+            normalized_condition = (condition or "good").lower()
+            weight = unit_cond_weights.get(normalized_condition, 0)
+            if weight > max_weight_by_item.get(inventory_uuid, 0):
+                max_weight_by_item[inventory_uuid] = weight
+                condition_map[inventory_uuid] = condition or "good"
+
+        return condition_map
 
     def get_item_condition(self, session: Session, item: InventoryItem) -> str:
         config_service = InventoryConfigService()

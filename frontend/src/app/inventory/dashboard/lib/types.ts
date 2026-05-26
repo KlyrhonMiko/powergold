@@ -72,3 +72,13 @@ export interface CategoryBreakdown {
   category: string;
   count: number;
 }
+
+export interface InventoryDashboardOverview {
+  stats: DashboardStats;
+  recent: RecentTransaction[];
+  low_stock: LowStockItem[];
+  pending_counts: PendingCounts;
+  inventory_breakdown: CategoryBreakdown[];
+  health: InventoryHealth;
+  trends: BorrowingTrend[];
+}

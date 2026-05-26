@@ -1,7 +1,7 @@
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import Column, Numeric
+from sqlalchemy import Column, Index, Numeric
 from sqlmodel import Field, Relationship
 from typing import TYPE_CHECKING
 
@@ -31,4 +31,18 @@ class BorrowRequestItem(BaseModel, table=True):
     )
     inventory_item: "InventoryItem" = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[BorrowRequestItem.item_uuid]"},
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_borrow_request_items_request_created",
+            "borrow_uuid",
+            "is_deleted",
+            "created_at",
+        ),
+        Index(
+            "ix_borrow_request_items_item_active",
+            "item_uuid",
+            "is_deleted",
+        ),
     )

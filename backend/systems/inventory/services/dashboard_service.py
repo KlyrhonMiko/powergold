@@ -90,15 +90,11 @@ class DashboardService:
             .where(BorrowRequest.is_deleted.is_(False))
         ).one()
 
-        inventory_service = InventoryService()
-        active_items = session.exec(
-            select(InventoryItem).where(InventoryItem.is_deleted.is_(False))
-        ).all()
-        low_stock_items = 0
-        for item in active_items:
-            balances = inventory_service.get_item_balances(session, item)
-            if balances["available_qty"] <= 5:
-                low_stock_items += 1
+        low_stock_items = session.exec(
+            select(func.count(InventoryItem.id))
+            .where(InventoryItem.is_deleted.is_(False))
+            .where(InventoryItem.available_qty <= 5)
+        ).one()
 
         # New metrics
         active_requests = session.exec(
@@ -181,14 +177,24 @@ class DashboardService:
             ).all()
             return [{"label": str(row[0]), "count": int(row[1])} for row in rows]
 
-        item_status_counter: dict[str, int] = {}
+        item_status_rows = session.exec(
+            select(InventoryItem.status, func.count(InventoryItem.id))
+            .where(InventoryItem.is_deleted.is_(False))
+            .group_by(InventoryItem.status)
+        ).all()
+        item_status_counter = {
+            str(status or "healthy").upper(): int(count)
+            for status, count in item_status_rows
+        }
+
+        active_items = session.exec(
+            select(InventoryItem).where(InventoryItem.is_deleted.is_(False))
+        ).all()
+        item_condition_map = inventory_service.get_item_condition_map(session, list(active_items))
         item_condition_counter: dict[str, int] = {}
-        active_items = session.exec(select(InventoryItem).where(InventoryItem.is_deleted.is_(False))).all()
-        for item in active_items:
-            status_label = inventory_service.get_item_status(session, item)
-            condition_label = inventory_service.get_item_condition(session, item)
-            item_status_counter[status_label] = item_status_counter.get(status_label, 0) + 1
-            item_condition_counter[condition_label] = item_condition_counter.get(condition_label, 0) + 1
+        for condition in item_condition_map.values():
+            label = str(condition or "good")
+            item_condition_counter[label] = item_condition_counter.get(label, 0) + 1
 
         return InventoryHealthBreakdown(
             item_statuses=[{"label": k, "count": v} for k, v in item_status_counter.items()],
@@ -237,32 +243,24 @@ class DashboardService:
         ).all()
 
     def get_low_stock_items(self, session: Session, threshold: int = 5) -> list[LowStockItemRead]:
-        inventory_service = InventoryService()
         items = session.exec(
             select(InventoryItem)
             .where(InventoryItem.is_deleted.is_(False))
-            .order_by(InventoryItem.name.asc())
+            .where(InventoryItem.available_qty <= threshold)
+            .order_by(InventoryItem.available_qty.asc(), InventoryItem.name.asc())
+            .limit(10)
         ).all()
-
-        low_items: list[tuple[InventoryItem, dict[str, Any]]] = []
-        for item in items:
-            balances = inventory_service.get_item_balances(session, item)
-            if balances["available_qty"] <= threshold:
-                low_items.append((item, balances))
-
-        low_items.sort(key=lambda row: row[1]["available_qty"])
-        low_items = low_items[:10]
 
         return [
             LowStockItemRead(
-                item_id=i.item_id,
-                name=i.name,
-                category=i.category,
-                unit_of_measure=i.unit_of_measure,
-                available_qty=balances["available_qty"],
-                total_qty=balances["total_qty"],
+                item_id=item.item_id,
+                name=item.name,
+                category=item.category,
+                unit_of_measure=item.unit_of_measure,
+                available_qty=item.available_qty,
+                total_qty=item.total_qty,
             )
-            for i, balances in low_items
+            for item in items
         ]
 
     def get_pending_counts(self, session: Session) -> dict[str, int]:
