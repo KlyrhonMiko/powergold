@@ -110,7 +110,7 @@ export default function BorrowPage() {
   const totalCartItems = cart.reduce((acc, curr) => acc + curr.cartQty, 0);
 
   const addToCart = (item: BorrowCatalogItem) => {
-    const step = item.is_trackable ? 1 : 0.001;
+    const step = 1;
     setCart((prev) => {
       const existing = prev.find((i) => i.item_id === item.item_id);
       if (existing) {
@@ -128,7 +128,7 @@ export default function BorrowPage() {
     setCart((prev) =>
       prev.map((i) => {
         if (i.item_id === id) {
-          const step = i.is_trackable ? 1 : 0.001;
+          const step = 1;
           const newQty = parseQuantityInput(String(i.cartQty + delta * step), 0);
           if (newQty > 0) {
             return { ...i, cartQty: newQty };

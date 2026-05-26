@@ -1,6 +1,7 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
 from core.database import get_session
@@ -18,18 +19,30 @@ from systems.admin.schemas.user_schemas import (
     UserSecondaryPasswordRead,
     UserUpdate,
 )
+from systems.admin.schemas.user_import_schemas import (
+    UserImportDuplicateGroupRead,
+    UserImportHistoryRead,
+    UserImportPreviewRowRead,
+    UserImportPreviewRowUpdateRequest,
+    UserImportPreviewSummary,
+    UserImportResponse,
+    UserImportRowActionRequest,
+    UserImportRowIssueRead,
+)
 from systems.auth.schemas.auth_schemas import (
     TwoFactorCodeVerifyRequest,
     TwoFactorEnrollmentInitiateRead,
     TwoFactorStatusRead,
 )
 from systems.admin.services.user_service import UserService
+from systems.admin.services.user_import_service import UserImportService
 from systems.auth.services.auth_service import auth_service
 from systems.inventory.services.entrusted_item_service import EntrustedItemService
 from systems.inventory.schemas.entrusted_item_schemas import EntrustedItemCreate, EntrustedItemRead, EntrustedItemRevoke
 
 router = APIRouter()
 user_service = UserService()
+user_import_service = UserImportService()
 entrusted_service = EntrustedItemService()
 
 TWO_FACTOR_BORROWER_FORBIDDEN_DETAIL = (
@@ -55,6 +68,430 @@ def _ensure_two_factor_management_allowed(target_user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail=TWO_FACTOR_BORROWER_FORBIDDEN_DETAIL,
         )
+
+
+@router.get(
+    "/import/history",
+    response_model=GenericResponse[list[UserImportHistoryRead]],
+)
+async def get_user_import_history(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
+    session: Session = Depends(get_session),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    skip = (page - 1) * per_page
+    results, total = user_import_service.get_history(session, skip=skip, limit=per_page)
+    return create_success_response(
+        data=[
+            UserImportHistoryRead(
+                id=item.id,
+                filename=item.filename,
+                actor_id=item.actor_id,
+                total_rows=item.total_rows,
+                success_count=item.success_count,
+                error_count=item.error_count,
+                status=item.status,
+                error_log=item.error_log,
+                has_credentials_download=bool(item.credentials_log),
+                created_at=item.created_at,
+            )
+            for item in results
+        ],
+        meta=make_pagination_meta(total=total, skip=skip, limit=per_page, page=page, per_page=per_page),
+        request=request,
+    )
+
+
+@router.get("/import/template")
+async def download_user_import_template(
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    return StreamingResponse(
+        iter([user_import_service.build_template_csv()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="user_import_template.csv"'},
+    )
+
+
+@router.post(
+    "/import/preview",
+    response_model=GenericResponse[UserImportPreviewSummary],
+)
+async def preview_user_import(
+    request: Request,
+    file: UploadFile = File(...),
+    mode: str = Query(default="skip", pattern="^(skip|overwrite)$"),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+
+    try:
+        preview_session = await user_import_service.create_preview(session, file, current_user.id, mode=mode)
+    except ValueError as exc:
+        detail = str(exc)
+        if "maximum allowed size" in detail:
+            raise HTTPException(status_code=413, detail=detail) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+    groups = user_import_service.build_duplicate_groups(preview_session.id)
+    return create_success_response(
+        data=UserImportPreviewSummary(
+            preview_id=preview_session.id,
+            filename=preview_session.filename,
+            mode=preview_session.mode,
+            delimiter=preview_session.parsed_csv.delimiter,
+            encoding=preview_session.parsed_csv.encoding,
+            bom_detected=preview_session.parsed_csv.bom_detected,
+            file_size=preview_session.parsed_csv.file_size,
+            total_rows=len(preview_session.row_previews),
+            ready_count=sum(1 for row in preview_session.row_previews if row.status == "ready"),
+            warning_count=sum(1 for row in preview_session.row_previews if row.status == "warning"),
+            error_count=sum(1 for row in preview_session.row_previews if row.status == "error"),
+            info_count=sum(1 for row in preview_session.row_previews if row.status == "info"),
+            file_issues=[
+                UserImportRowIssueRead(field=issue.field, code=issue.code, severity=issue.severity, message=issue.message)
+                for issue in preview_session.parsed_csv.file_issues
+            ],
+            can_apply=sum(1 for row in preview_session.row_previews if row.status == "error") == 0
+            and not any(issue.severity == "error" for issue in preview_session.parsed_csv.file_issues),
+            headers=preview_session.parsed_csv.headers,
+            duplicate_groups=[
+                UserImportDuplicateGroupRead(
+                    key=group.key,
+                    label=group.label,
+                    count=group.count,
+                    severity=group.severity,
+                    recommended_action=group.recommended_action,
+                    requires_user_decision=group.requires_user_decision,
+                )
+                for group in groups
+            ],
+            auto_resolved_count=sum(
+                1
+                for row in preview_session.row_previews
+                if row.recommended_action and row.recommended_action not in {"block"} and not row.requires_user_decision
+            ),
+            decision_required_count=sum(1 for row in preview_session.row_previews if row.requires_user_decision),
+            unresolved_blocker_count=sum(
+                1 for row in preview_session.row_previews if row.requires_user_decision and not row.selected_action
+            ),
+        ),
+        request=request,
+    )
+
+
+@router.get(
+    "/import/preview/{preview_id}",
+    response_model=GenericResponse[UserImportPreviewSummary],
+)
+async def get_user_import_preview(
+    preview_id: str,
+    request: Request,
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    preview_session = user_import_service.get_preview_session(preview_id)
+    if preview_session is None:
+        raise HTTPException(status_code=404, detail="Preview session not found or expired. Please re-upload.")
+    groups = user_import_service.build_duplicate_groups(preview_id)
+    return create_success_response(
+        data=UserImportPreviewSummary(
+            preview_id=preview_session.id,
+            filename=preview_session.filename,
+            mode=preview_session.mode,
+            delimiter=preview_session.parsed_csv.delimiter,
+            encoding=preview_session.parsed_csv.encoding,
+            bom_detected=preview_session.parsed_csv.bom_detected,
+            file_size=preview_session.parsed_csv.file_size,
+            total_rows=len(preview_session.row_previews),
+            ready_count=sum(1 for row in preview_session.row_previews if row.status == "ready"),
+            warning_count=sum(1 for row in preview_session.row_previews if row.status == "warning"),
+            error_count=sum(1 for row in preview_session.row_previews if row.status == "error"),
+            info_count=sum(1 for row in preview_session.row_previews if row.status == "info"),
+            file_issues=[
+                UserImportRowIssueRead(field=issue.field, code=issue.code, severity=issue.severity, message=issue.message)
+                for issue in preview_session.parsed_csv.file_issues
+            ],
+            can_apply=sum(1 for row in preview_session.row_previews if row.status == "error") == 0
+            and not any(issue.severity == "error" for issue in preview_session.parsed_csv.file_issues),
+            headers=preview_session.parsed_csv.headers,
+            duplicate_groups=[
+                UserImportDuplicateGroupRead(
+                    key=group.key,
+                    label=group.label,
+                    count=group.count,
+                    severity=group.severity,
+                    recommended_action=group.recommended_action,
+                    requires_user_decision=group.requires_user_decision,
+                )
+                for group in groups
+            ],
+            auto_resolved_count=sum(
+                1
+                for row in preview_session.row_previews
+                if row.recommended_action and row.recommended_action not in {"block"} and not row.requires_user_decision
+            ),
+            decision_required_count=sum(1 for row in preview_session.row_previews if row.requires_user_decision),
+            unresolved_blocker_count=sum(
+                1 for row in preview_session.row_previews if row.requires_user_decision and not row.selected_action
+            ),
+        ),
+        request=request,
+    )
+
+
+@router.get(
+    "/import/preview/{preview_id}/rows",
+    response_model=GenericResponse[list[UserImportPreviewRowRead]],
+)
+async def get_user_import_preview_rows(
+    preview_id: str,
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=50, ge=1, le=500),
+    filter_status: str = Query(default="all", pattern="^(all|ready|warning|error|info|needs_review)$"),
+    group_key: str | None = Query(default=None),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    preview_session = user_import_service.get_preview_session(preview_id)
+    if preview_session is None:
+        raise HTTPException(status_code=404, detail="Preview session not found or expired. Please re-upload.")
+
+    rows = preview_session.row_previews
+    if group_key:
+        rows = [row for row in rows if user_import_service.row_matches_group_key(row, group_key)]
+    elif filter_status == "needs_review":
+        rows = [row for row in rows if row.requires_user_decision]
+    elif filter_status != "all":
+        rows = [row for row in rows if row.status == filter_status]
+
+    total = len(rows)
+    skip = (page - 1) * per_page
+    paged = rows[skip : skip + per_page]
+    return create_success_response(
+        data=[
+            UserImportPreviewRowRead(
+                row_number=row.row_number,
+                original_values=row.original_values,
+                normalized_values=row.normalized_values,
+                resolved_values=row.resolved_values,
+                status=row.status,
+                issues=[
+                    UserImportRowIssueRead(field=issue.field, code=issue.code, severity=issue.severity, message=issue.message)
+                    for issue in row.issues
+                ],
+                action=row.action,
+                stock_interpretation=row.stock_interpretation,
+                duplicate_type=row.duplicate_type,
+                duplicate_subtype=row.duplicate_subtype,
+                recommended_action=row.recommended_action,
+                selected_action=row.selected_action,
+                requires_user_decision=row.requires_user_decision,
+                group_key=row.group_key,
+                target_match_summary=row.target_match_summary,
+            )
+            for row in paged
+        ],
+        meta=make_pagination_meta(total=total, skip=skip, limit=per_page, page=page, per_page=per_page),
+        request=request,
+    )
+
+
+@router.patch(
+    "/import/preview/{preview_id}/rows/{row_number}",
+    response_model=GenericResponse[UserImportPreviewRowRead],
+)
+async def update_user_import_preview_row(
+    preview_id: str,
+    row_number: int,
+    body: UserImportPreviewRowUpdateRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    result = user_import_service.update_row_in_preview(session, preview_id, row_number, body.updates)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Preview session not found or row out of range.")
+    updated_preview, _ = result
+    return create_success_response(
+        data=UserImportPreviewRowRead(
+            row_number=updated_preview.row_number,
+            original_values=updated_preview.original_values,
+            normalized_values=updated_preview.normalized_values,
+            resolved_values=updated_preview.resolved_values,
+            status=updated_preview.status,
+            issues=[
+                UserImportRowIssueRead(field=issue.field, code=issue.code, severity=issue.severity, message=issue.message)
+                for issue in updated_preview.issues
+            ],
+            action=updated_preview.action,
+            stock_interpretation=updated_preview.stock_interpretation,
+            duplicate_type=updated_preview.duplicate_type,
+            duplicate_subtype=updated_preview.duplicate_subtype,
+            recommended_action=updated_preview.recommended_action,
+            selected_action=updated_preview.selected_action,
+            requires_user_decision=updated_preview.requires_user_decision,
+            group_key=updated_preview.group_key,
+            target_match_summary=updated_preview.target_match_summary,
+        ),
+        request=request,
+    )
+
+
+@router.post(
+    "/import/preview/{preview_id}/actions/accept-recommended",
+    response_model=GenericResponse[dict],
+)
+async def accept_user_import_recommended_actions(
+    preview_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    accepted = user_import_service.accept_recommended_actions(session, preview_id)
+    return create_success_response(data={"accepted": accepted}, request=request)
+
+
+@router.post(
+    "/import/preview/{preview_id}/actions/row/{row_number}",
+    response_model=GenericResponse[UserImportPreviewRowRead],
+)
+async def set_user_import_row_action(
+    preview_id: str,
+    row_number: int,
+    body: UserImportRowActionRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    result = user_import_service.set_row_action(session, preview_id, row_number, body.action)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Preview session not found or row out of range.")
+    return create_success_response(
+        data=UserImportPreviewRowRead(
+            row_number=result.row_number,
+            original_values=result.original_values,
+            normalized_values=result.normalized_values,
+            resolved_values=result.resolved_values,
+            status=result.status,
+            issues=[
+                UserImportRowIssueRead(field=issue.field, code=issue.code, severity=issue.severity, message=issue.message)
+                for issue in result.issues
+            ],
+            action=result.action,
+            stock_interpretation=result.stock_interpretation,
+            duplicate_type=result.duplicate_type,
+            duplicate_subtype=result.duplicate_subtype,
+            recommended_action=result.recommended_action,
+            selected_action=result.selected_action,
+            requires_user_decision=result.requires_user_decision,
+            group_key=result.group_key,
+            target_match_summary=result.target_match_summary,
+        ),
+        request=request,
+    )
+
+
+@router.post(
+    "/import/preview/{preview_id}/actions/ignore-all-blockers",
+    response_model=GenericResponse[dict],
+)
+async def ignore_all_user_import_blockers(
+    preview_id: str,
+    request: Request,
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    ignored = user_import_service.ignore_all_blockers(preview_id)
+    return create_success_response(data={"ignored": ignored}, request=request)
+
+
+@router.post(
+    "/import/preview/{preview_id}/apply",
+    response_model=GenericResponse[UserImportResponse],
+)
+async def apply_user_import_preview(
+    preview_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    preview_session = user_import_service.get_preview_session(preview_id)
+    if preview_session is None:
+        raise HTTPException(status_code=404, detail="Preview session not found or expired. Please re-upload.")
+    preview_session.actor_id = current_user.id
+    try:
+        history = await user_import_service.apply_preview(session, preview_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return create_success_response(
+        data=UserImportResponse(
+            history_id=history.id,
+            status=history.status,
+            total=history.total_rows,
+            success=history.success_count,
+            failed=history.error_count,
+            has_credentials_download=bool(preview_session.credentials_rows),
+        ),
+        request=request,
+    )
+
+
+@router.get("/import/preview/{preview_id}/download")
+async def download_user_import_corrected_csv(
+    preview_id: str,
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    try:
+        csv_content = user_import_service.build_corrected_csv(preview_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    preview_session = user_import_service.get_preview_session(preview_id)
+    download_name = f"corrected_{preview_session.filename}" if preview_session else "corrected_user_import.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
+
+
+@router.get("/import/preview/{preview_id}/credentials")
+async def download_user_import_credentials(
+    preview_id: str,
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    try:
+        csv_content = user_import_service.build_credentials_csv(preview_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="user_import_credentials_{preview_id}.csv"'},
+    )
+
+
+@router.get("/import/history/{history_id}/credentials")
+async def download_user_import_credentials_from_history(
+    history_id: str,
+    session: Session = Depends(get_session),
+    _: None = Depends(require_permission("admin:users:manage")),
+):
+    try:
+        csv_content = user_import_service.build_credentials_csv_from_history(session, history_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="user_import_credentials_{history_id}.csv"'},
+    )
 
 
 @router.post(
@@ -574,4 +1011,3 @@ async def revoke_entrusted_item(
         return create_success_response(data=item, message="Assignment revoked successfully.", request=request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-

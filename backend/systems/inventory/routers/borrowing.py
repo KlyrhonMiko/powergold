@@ -27,7 +27,6 @@ from systems.inventory.schemas.borrow_request_schemas import (
     ReleaseReceiptRead,
     ReleaseReceiptSignature,
 )
-from systems.inventory.dependencies import shift_guard
 from systems.inventory.services.borrow_request_service import BorrowService
 from systems.auth.dependencies import require_permission
 
@@ -127,8 +126,7 @@ async def approve_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         updated_req = borrow_service.approve_request(
@@ -164,8 +162,7 @@ async def reject_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         updated_req = borrow_service.reject_request(
@@ -201,8 +198,7 @@ async def release_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         updated_req = borrow_service.release_request(
@@ -239,8 +235,7 @@ async def assign_units_to_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         assignments = borrow_service.assign_units(
@@ -273,8 +268,7 @@ async def assign_batches_to_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         assignments = borrow_service.assign_batches(
@@ -351,8 +345,7 @@ async def return_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         updated_req = borrow_service.return_request(
@@ -391,8 +384,7 @@ async def reopen_request(
     request: Request,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    _: User = Depends(shift_guard),
-    __: None = Depends(require_permission("inventory:borrow_requests:manage")),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
 ):
     try:
         updated_req = borrow_service.reopen_request(

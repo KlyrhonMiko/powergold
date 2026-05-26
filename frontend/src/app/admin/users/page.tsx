@@ -7,6 +7,7 @@ import { UserModal } from './UserModal';
 import { ConfirmActionModal } from './components/ConfirmActionModal';
 import { UserCredentialsModal } from './components/UserCredentialsModal';
 import { UsersPageHeader } from './components/UsersPageHeader';
+import { UserImportSection } from './components/UserImportSection';
 import { UsersTable } from './components/UsersTable';
 import { UsersToolbar } from './components/UsersToolbar';
 import { useUsersManagement } from './lib/useUsersManagement';
@@ -52,6 +53,8 @@ export default function UsersPage() {
           <p>{error}</p>
         </div>
       )}
+
+      <UserImportSection />
 
       <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
         <UsersToolbar

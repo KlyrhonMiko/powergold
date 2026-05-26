@@ -1,0 +1,222 @@
+============================= test session starts ==============================
+platform linux -- Python 3.14.4, pytest-9.0.2, pluggy-1.6.0
+rootdir: /home/plpasig/Programming/Python/Web Development/powergold/backend
+plugins: anyio-4.12.1
+collected 4 items
+
+tests/test_user_import_service.py ..FF                                   [100%]
+
+=================================== FAILURES ===================================
+________ test_user_import_apply_creates_users_and_generates_credentials ________
+
+    def test_user_import_apply_creates_users_and_generates_credentials() -> None:
+        engine = _build_engine()
+        SQLModel.metadata.create_all(engine)
+        service = UserImportService()
+    
+        with Session(engine) as session:
+            _seed_configs(session)
+            admin = _seed_admin_user(session)
+    
+            upload = UploadFile(
+                filename="users.csv",
+                file=io.BytesIO(
+                    (
+                        "employee_id,first_name,last_name,role,shift_type,email\n"
+                        "EMP-2001,Alex,Rivera,staff,day,alex@example.com\n"
+                        "EMP-2002,Bella,Cruz,borrower,day,\n"
+                    ).encode("utf-8")
+                ),
+            )
+            preview = asyncio.run(service.create_preview(session, upload, actor_id=admin.id))
+            history = asyncio.run(service.apply_preview(session, preview.id))
+    
+            created_users = list(session.exec(select(User).where(User.employee_id.in_(["EMP-2001", "EMP-2002"]))).all())
+            stored_history = session.exec(select(UserImportHistory).where(UserImportHistory.id == history.id)).one()
+    
+        assert len(created_users) == 2
+        assert stored_history.success_count == 2
+        assert stored_history.error_count == 0
+        assert len(preview.credentials_rows) == 2
+        staff_credentials = next(row for row in preview.credentials_rows if row["employee_id"] == "EMP-2001")
+        borrower_credentials = next(row for row in preview.credentials_rows if row["employee_id"] == "EMP-2002")
+>       assert staff_credentials["generated_login_password_or_pin"].isdigit()
+E       AssertionError: assert False
+E        +  where False = <built-in method isdigit of str object at 0x7fd690ae3c30>()
+E        +    where <built-in method isdigit of str object at 0x7fd690ae3c30> = '8y4m1kZhLoDv'.isdigit
+
+tests/test_user_import_service.py:122: AssertionError
+______________ test_user_import_update_also_generates_credentials ______________
+
+self = <sqlalchemy.engine.base.Connection object at 0x7fd6900dc320>
+dialect = <sqlalchemy.dialects.sqlite.pysqlite.SQLiteDialect_pysqlite object at 0x7fd690ad47d0>
+constructor = <bound method DefaultExecutionContext._init_compiled of <class 'sqlalchemy.dialects.sqlite.base.SQLiteExecutionContext'>>
+statement = <sqlalchemy.dialects.sqlite.base.SQLiteCompiler object at 0x7fd690279650>
+parameters = [{'pk_1': '019e62c2-9f53-7118-b054-0fba3e7d30ed'}]
+execution_options = immutabledict({'_sa_orm_load_options': <class 'sqlalchemy.orm.context.QueryContext.default_load_options'>, '_result_disable_adapt_to_context': True})
+args = (<sqlalchemy.dialects.sqlite.base.SQLiteCompiler object at 0x7fd690279650>, [{'pk_1': '019e62c2-9f53-7118-b054-0fba3e7...'}], <sqlalchemy.sql.selectable.Select object at 0x7fd6901585f0>, [AnnotatedBindParameter('pk_1', None, type_=Uuid())])
+kw = {'cache_hit': <CacheStats.CACHE_MISS: 1>}, yp = None
+conn = <sqlalchemy.pool.base._ConnectionFairy object at 0x7fd6900dc9b0>
+
+    def _execute_context(
+        self,
+        dialect: Dialect,
+        constructor: Callable[..., ExecutionContext],
+        statement: Union[str, Compiled],
+        parameters: Optional[_AnyMultiExecuteParams],
+        execution_options: _ExecuteOptions,
+        *args: Any,
+        **kw: Any,
+    ) -> CursorResult[Any]:
+        """Create an :class:`.ExecutionContext` and execute, returning
+        a :class:`_engine.CursorResult`."""
+    
+        if execution_options:
+            yp = execution_options.get("yield_per", None)
+            if yp:
+                execution_options = execution_options.union(
+                    {"stream_results": True, "max_row_buffer": yp}
+                )
+        try:
+            conn = self._dbapi_connection
+            if conn is None:
+                conn = self._revalidate_connection()
+    
+>           context = constructor(
+                dialect, self, conn, execution_options, *args, **kw
+            )
+
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/base.py:1815: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/default.py:1496: in _init_compiled
+    flattened_processors[key](compiled_params[key])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = '019e62c2-9f53-7118-b054-0fba3e7d30ed'
+
+    def process(value):
+        if value is not None:
+>           value = value.hex
+                    ^^^^^^^^^
+E           AttributeError: 'str' object has no attribute 'hex'
+
+.venv/lib64/python3.14/site-packages/sqlalchemy/sql/sqltypes.py:3734: AttributeError
+
+The above exception was the direct cause of the following exception:
+
+    def test_user_import_update_also_generates_credentials() -> None:
+        engine = _build_engine()
+        SQLModel.metadata.create_all(engine)
+        service = UserImportService()
+    
+        with Session(engine) as session:
+            _seed_configs(session)
+            admin = _seed_admin_user(session)
+            existing = User(
+                user_id="USER-0009",
+                username="EMP-9001",
+                hashed_password="hashed",
+                first_name="Old",
+                last_name="Name",
+                role="staff",
+                shift_type="day",
+                employee_id="EMP-9001",
+                email="old@example.com",
+            )
+            session.add(existing)
+            session.commit()
+    
+            upload = UploadFile(
+                filename="users.csv",
+                file=io.BytesIO(
+                    (
+                        "employee_id,first_name,last_name,role,shift_type,email\n"
+                        "EMP-9001,New,Name,staff,day,new@example.com\n"
+                    ).encode("utf-8")
+                ),
+            )
+            preview = asyncio.run(service.create_preview(session, upload, actor_id=admin.id))
+            history = asyncio.run(service.apply_preview(session, preview.id))
+    
+            updated = session.exec(select(User).where(User.employee_id == "EMP-9001")).one()
+>           history_csv = service.build_credentials_csv_from_history(session, str(history.id))
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_user_import_service.py:169: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+systems/admin/services/user_import_service.py:903: in build_credentials_csv_from_history
+    history = self.get_history_item(session, history_id)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+systems/admin/services/user_import_service.py:165: in get_history_item
+    return session.get(UserImportHistory, history_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib64/python3.14/site-packages/sqlalchemy/orm/session.py:3680: in get
+    return self._get_impl(
+.venv/lib64/python3.14/site-packages/sqlalchemy/orm/session.py:3859: in _get_impl
+    return db_load_fn(
+.venv/lib64/python3.14/site-packages/sqlalchemy/orm/loading.py:695: in load_on_pk_identity
+    session.execute(
+.venv/lib64/python3.14/site-packages/sqlmodel/orm/session.py:136: in execute
+    return super().execute(
+.venv/lib64/python3.14/site-packages/sqlalchemy/orm/session.py:2351: in execute
+    return self._execute_internal(
+.venv/lib64/python3.14/site-packages/sqlalchemy/orm/session.py:2249: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+.venv/lib64/python3.14/site-packages/sqlalchemy/orm/context.py:306: in orm_execute_statement
+    result = conn.execute(
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/base.py:1419: in execute
+    return meth(
+.venv/lib64/python3.14/site-packages/sqlalchemy/sql/elements.py:527: in _execute_on_connection
+    return connection._execute_clauseelement(
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/base.py:1641: in _execute_clauseelement
+    ret = self._execute_context(
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/base.py:1821: in _execute_context
+    self._handle_dbapi_exception(
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/base.py:2363: in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/base.py:1815: in _execute_context
+    context = constructor(
+.venv/lib64/python3.14/site-packages/sqlalchemy/engine/default.py:1496: in _init_compiled
+    flattened_processors[key](compiled_params[key])
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = '019e62c2-9f53-7118-b054-0fba3e7d30ed'
+
+    def process(value):
+        if value is not None:
+>           value = value.hex
+                    ^^^^^^^^^
+E           sqlalchemy.exc.StatementError: (builtins.AttributeError) 'str' object has no attribute 'hex'
+E           [SQL: SELECT user_import_history.id AS user_import_history_id, user_import_history.created_at AS user_import_history_created_at, user_import_history.updated_at AS user_import_history_updated_at, user_import_history.is_deleted AS user_import_history_is_deleted, user_import_history.deleted_at AS user_import_history_deleted_at, user_import_history.is_archived AS user_import_history_is_archived, user_import_history.archived_at AS user_import_history_archived_at, user_import_history.retention_tags AS user_import_history_retention_tags, user_import_history.filename AS user_import_history_filename, user_import_history.actor_id AS user_import_history_actor_id, user_import_history.total_rows AS user_import_history_total_rows, user_import_history.success_count AS user_import_history_success_count, user_import_history.error_count AS user_import_history_error_count, user_import_history.status AS user_import_history_status, user_import_history.error_log AS user_import_history_error_log, user_import_history.credentials_log AS user_import_history_credentials_log 
+E           FROM user_import_history 
+E           WHERE user_import_history.id = ?]
+E           [parameters: [{'pk_1': '019e62c2-9f53-7118-b054-0fba3e7d30ed'}]]
+
+.venv/lib64/python3.14/site-packages/sqlalchemy/sql/sqltypes.py:3734: StatementError
+=============================== warnings summary ===============================
+tests/test_user_import_service.py::test_user_import_preview_flags_email_conflicts_and_normalizes_shift_labels
+tests/test_user_import_service.py::test_user_import_apply_creates_users_and_generates_credentials
+tests/test_user_import_service.py::test_user_import_update_also_generates_credentials
+  /home/plpasig/Programming/Python/Web Development/powergold/backend/systems/admin/services/user_import_service.py:605: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    created_at=datetime.utcnow(),
+
+tests/test_user_import_service.py::test_user_import_preview_flags_email_conflicts_and_normalizes_shift_labels
+tests/test_user_import_service.py::test_user_import_apply_creates_users_and_generates_credentials
+tests/test_user_import_service.py::test_user_import_update_also_generates_credentials
+  /home/plpasig/Programming/Python/Web Development/powergold/backend/systems/admin/services/user_import_service.py:606: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expires_at=datetime.utcnow() + timedelta(minutes=PREVIEW_SESSION_TTL_MINUTES),
+
+tests/test_user_import_service.py::test_user_import_apply_creates_users_and_generates_credentials
+tests/test_user_import_service.py::test_user_import_update_also_generates_credentials
+  /home/plpasig/Programming/Python/Web Development/powergold/backend/systems/admin/services/user_import_service.py:148: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = datetime.utcnow()
+
+tests/test_user_import_service.py::test_user_import_apply_creates_users_and_generates_credentials
+  /home/plpasig/Programming/Python/Web Development/powergold/backend/.venv/lib64/python3.14/site-packages/passlib/handlers/argon2.py:716: DeprecationWarning: Accessing argon2.__version__ is deprecated and will be removed in a future release. Use importlib.metadata directly to query for argon2-cffi's packaging metadata.
+    _argon2_cffi.__version__, max_version)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_user_import_service.py::test_user_import_apply_creates_users_and_generates_credentials
+FAILED tests/test_user_import_service.py::test_user_import_update_also_generates_credentials
+=================== 2 failed, 2 passed, 9 warnings in 2.39s ====================

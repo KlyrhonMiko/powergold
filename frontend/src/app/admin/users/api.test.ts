@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   mockPost: vi.fn(),
   mockPatch: vi.fn(),
   mockDelete: vi.fn(),
+  mockGetRaw: vi.fn(),
   mockBuildQueryString: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('@/lib/api', async () => {
       post: mocks.mockPost,
       patch: mocks.mockPatch,
       delete: mocks.mockDelete,
+      getRaw: mocks.mockGetRaw,
     },
     buildQueryString: mocks.mockBuildQueryString,
   };
@@ -32,6 +34,7 @@ describe('admin users api', () => {
     mocks.mockPost.mockReset();
     mocks.mockPatch.mockReset();
     mocks.mockDelete.mockReset();
+    mocks.mockGetRaw.mockReset();
     mocks.mockBuildQueryString.mockReset();
     mocks.mockBuildQueryString.mockReturnValue('');
   });
@@ -86,5 +89,37 @@ describe('admin users api', () => {
     await userApi.getTwoFactorStatus('USER-001');
 
     expect(mocks.mockGet).toHaveBeenCalledWith('/admin/users/USER-001/2fa/status');
+  });
+
+  it('calls import history endpoint with pagination', async () => {
+    mocks.mockGet.mockResolvedValue({ status: 'success', data: [] });
+
+    await userApi.getImportHistory(2, 5);
+
+    expect(mocks.mockGet).toHaveBeenCalledWith('/admin/users/import/history?page=2&per_page=5');
+  });
+
+  it('posts preview uploads to the import preview endpoint', async () => {
+    mocks.mockPost.mockResolvedValue({ status: 'success', data: {} });
+
+    await userApi.previewImport(new File(['a'], 'users.csv', { type: 'text/csv' }), 'skip');
+
+    expect(mocks.mockPost).toHaveBeenCalledWith('/admin/users/import/preview?mode=skip', expect.any(FormData));
+  });
+
+  it('downloads the user import template through the raw API helper', async () => {
+    mocks.mockGetRaw.mockResolvedValue({ ok: true });
+
+    await userApi.downloadImportTemplate();
+
+    expect(mocks.mockGetRaw).toHaveBeenCalledWith('/admin/users/import/template');
+  });
+
+  it('downloads import credentials from history through the raw API helper', async () => {
+    mocks.mockGetRaw.mockResolvedValue({ ok: true });
+
+    await userApi.downloadImportCredentialsFromHistory('history-123');
+
+    expect(mocks.mockGetRaw).toHaveBeenCalledWith('/admin/users/import/history/history-123/credentials');
   });
 });

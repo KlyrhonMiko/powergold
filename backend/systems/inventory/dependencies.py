@@ -34,7 +34,7 @@ def shift_guard(
     shift_type = (current_user.shift_type or "").lower()
     role = (current_user.role or "").lower()
 
-    if shift_type == "night" and role == "admin":
+    if shift_type in ["night", "evening"] and role == "admin":
         _log_shift_guard_bypass(
             current_user.id,
             current_user.shift_type,
@@ -42,9 +42,9 @@ def shift_guard(
         )
         return current_user
 
-    if shift_type == "night" and role != "admin":
+    if shift_type in ["night", "evening"] and role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Night shift users are restricted from performing inventory adjustments."
+            detail=f"{shift_type.capitalize()} shift users are restricted from performing inventory adjustments."
         )
     return current_user

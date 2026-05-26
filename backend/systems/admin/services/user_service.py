@@ -111,6 +111,9 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
     def _generate_secondary_password(self) -> str:
         return secrets.token_urlsafe(24)
 
+    def _generate_import_login_code(self) -> str:
+        return "".join(secrets.choice(string.digits) for _ in range(6))
+
     def _get_secondary_password_rotation_interval_days(self, session: Session) -> int:
         from systems.auth.services.configuration_service import AuthConfigService
 
@@ -377,6 +380,143 @@ class UserService(BaseService[User, UserCreate, UserUpdate]):
         session.flush()
         session.refresh(db_obj)
         return db_obj, generated_credentials
+
+    def create_imported_with_generated_credentials(
+        self,
+        session: Session,
+        schema: UserCreate,
+        actor_id: UUID | None = None,
+    ) -> tuple[User, dict[str, str] | None]:
+        normalized_role = self._normalize_role(schema.role)
+        
+        if self._is_borrower_role(normalized_role):
+            generated_login_code = self._generate_import_login_code()
+            generated_schema = schema.model_copy(update={"password": generated_login_code})
+            created_user, _ = self.create_with_generated_credentials(
+                session,
+                generated_schema,
+                actor_id=actor_id,
+            )
+            return created_user, {
+                "one_time_login_password": generated_login_code,
+                "secondary_password": "",
+            }
+            
+        from systems.auth.services.configuration_service import AuthConfigService
+
+        auth_config_service = AuthConfigService()
+        self.validate_uniqueness(
+            session,
+            schema,
+            unique_fields=[["email"], ["username"]],
+        )
+
+        setting = auth_config_service.get_by_key(
+            session,
+            key=normalized_role,
+            category="users_role"
+        )
+        if not setting:
+            raise ValueError(
+                f"Configuration Error: ID prefix for role '{schema.role}' is not defined. "
+                f"Please add it to system_settings under category 'users_role'."
+            )
+
+        prefix = setting.value
+        data = schema.model_dump()
+        data["role"] = normalized_role
+        data.pop("password", None)
+        
+        one_time_login_password = self._generate_policy_compliant_password(session, normalized_role, min_length=12)
+        secondary_password = self._generate_secondary_password()
+        
+        data["hashed_password"] = get_password_hash(one_time_login_password)
+        data["must_change_password"] = True
+        data["password_rotated_at"] = None
+        data["recovery_credential_encrypted"] = encrypt_sensitive_value(secondary_password)
+        data["recovery_credential_rotated_at"] = get_now_manila()
+
+        if not data.get(self.lookup_field):
+            data[self.lookup_field] = get_next_sequence(session, self.model, self.lookup_field, prefix)
+
+        db_obj = self.model(**data)
+        session.add(db_obj)
+
+        self._log_audit(
+            session=session,
+            action="created",
+            entity_id=db_obj.user_id,
+            after=self._redact_sensitive_payload(db_obj.model_dump(mode="json")),
+            actor_id=actor_id,
+        )
+
+        session.flush()
+        session.refresh(db_obj)
+        return db_obj, {
+            "one_time_login_password": one_time_login_password,
+            "secondary_password": secondary_password,
+        }
+
+    def regenerate_import_credentials(
+        self,
+        session: Session,
+        user: User,
+        actor_id: UUID | None = None,
+    ) -> dict[str, str]:
+        before = user.model_dump(mode="json")
+
+        if self._is_borrower_role(user.role):
+            generated_login_code = self._generate_import_login_code()
+            user.hashed_password = get_password_hash(generated_login_code)
+            user.must_change_password = False
+            user.password_rotated_at = get_now_manila()
+            user.recovery_credential_encrypted = None
+            user.recovery_credential_rotated_at = None
+            user.updated_at = get_now_manila()
+            session.add(user)
+
+            self._log_audit(
+                session=session,
+                action="import_credentials_regenerated",
+                entity_id=user.user_id,
+                before=self._redact_sensitive_payload(before),
+                after=self._redact_sensitive_payload(user.model_dump(mode="json")),
+                actor_id=actor_id,
+                reason_code="bulk_import_update_reset",
+            )
+            session.flush()
+            session.refresh(user)
+            return {
+                "one_time_login_password": generated_login_code,
+                "secondary_password": "",
+            }
+
+        one_time_login_password = self._generate_policy_compliant_password(session, user.role, min_length=12)
+        secondary_password = self._generate_secondary_password()
+        
+        user.hashed_password = get_password_hash(one_time_login_password)
+        user.must_change_password = True
+        user.password_rotated_at = None
+        user.recovery_credential_encrypted = encrypt_sensitive_value(secondary_password)
+        user.recovery_credential_rotated_at = get_now_manila()
+        user.updated_at = get_now_manila()
+        session.add(user)
+
+        self._log_audit(
+            session=session,
+            action="import_credentials_regenerated",
+            entity_id=user.user_id,
+            before=self._redact_sensitive_payload(before),
+            after=self._redact_sensitive_payload(user.model_dump(mode="json")),
+            actor_id=actor_id,
+            reason_code="bulk_import_update_reset",
+        )
+        session.flush()
+        session.refresh(user)
+        return {
+            "one_time_login_password": one_time_login_password,
+            "secondary_password": secondary_password,
+        }
 
     def update(
         self,
