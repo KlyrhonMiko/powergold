@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { X, Loader2, CheckCircle2, AlertCircle, Info, Layers, Sparkles } from 'lucide-react';
 import { parseSystemDate } from '@/lib/utils';
 import { borrowApi, BorrowRequest } from './api';
-import { inventoryApi } from '../items/api';
 import { toast } from 'sonner';
 import {
   areQuantitiesEqual,
@@ -70,51 +69,49 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
     }));
     setItemsData(allItems);
 
-    // Fetch units/batches for each item
-    allItems.forEach(item => {
-      if (item.isTrackable) {
-        fetchUnitsForItem(item.itemId);
-      } else {
-        fetchBatchesForItem(item.itemId);
-      }
-    });
+    void fetchAssignmentOptions(allItems);
   }, [request]);
 
-  const fetchUnitsForItem = async (itemId: string) => {
+  const fetchAssignmentOptions = async (allItems: ItemAssignmentData[]) => {
     try {
-      const res = await inventoryApi.listUnits(itemId, { status: 'available', per_page: 100 });
-      setItemsData(prev => prev.map(item =>
-        item.itemId === itemId
-          ? { ...item, availableUnits: res.data as ItemAssignmentData['availableUnits'], loading: false }
-          : item
-      ));
+      const res = await borrowApi.getAssignmentOptions(request.request_id);
+      const optionMap = new Map(res.data.items.map((item) => [item.item_id, item]));
+      setItemsData(
+        allItems.map((item) => {
+          const option = optionMap.get(item.itemId);
+          if (!option) {
+            return {
+              ...item,
+              loading: false,
+              error: 'No assignment options found for this request item',
+            };
+          }
+          return {
+            ...item,
+            availableUnits: option.available_units.map((unit) => ({
+              unit_id: unit.unit_id,
+              serial_number: unit.serial_number ?? '',
+              condition: unit.condition ?? 'good',
+            })),
+            availableBatches: option.available_batches.map((batch) => ({
+              batch_id: batch.batch_id,
+              available_qty: batch.available_qty,
+              expiration_date: batch.expiration_date ?? undefined,
+            })),
+            loading: false,
+            error: null,
+          };
+        }),
+      );
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch units';
-      setItemsData(prev => prev.map(item =>
-        item.itemId === itemId
-          ? { ...item, loading: false, error: message }
-          : item
-      ));
-    }
-  };
-
-  const fetchBatchesForItem = async (itemId: string) => {
-    try {
-      const res = await inventoryApi.listBatches(itemId, { include_expired: false });
-      // Filter out batches with 0 quantity
-      const activeBatches = (res.data as BatchAvailability[]).filter(b => b.available_qty > 0);
-      setItemsData(prev => prev.map(item =>
-        item.itemId === itemId
-          ? { ...item, availableBatches: activeBatches, loading: false }
-          : item
-      ));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch batches';
-      setItemsData(prev => prev.map(item =>
-        item.itemId === itemId
-          ? { ...item, loading: false, error: message }
-          : item
-      ));
+      const message = err instanceof Error ? err.message : 'Failed to fetch assignment options';
+      setItemsData(
+        allItems.map((item) => ({
+          ...item,
+          loading: false,
+          error: message,
+        })),
+      );
     }
   };
 
@@ -228,24 +225,19 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
 
     setSubmitting(true);
     try {
-      for (const item of itemsData) {
-        if (item.isTrackable) {
-          await borrowApi.assignUnits(request.request_id, {
-            unit_ids: item.selectedUnitIds,
-            item_id: item.itemId,
-            notes: notes || undefined,
-          });
-        } else {
-          await borrowApi.assignBatches(request.request_id, {
-            assignments: item.selectedBatches.map(b => ({
-              batch_id: b.batch_id,
-              qty: b.qty
+      await borrowApi.assignInventory(request.request_id, {
+        items: itemsData.map((item) => ({
+          item_id: item.itemId,
+          unit_ids: item.isTrackable ? item.selectedUnitIds : [],
+          batch_assignments: item.isTrackable
+            ? []
+            : item.selectedBatches.map((batch) => ({
+              batch_id: batch.batch_id,
+              qty: batch.qty,
             })),
-            item_id: item.itemId,
-            notes: notes || undefined,
-          });
-        }
-      }
+        })),
+        notes: notes || undefined,
+      });
       toast.success('Inventory assigned successfully');
       onSuccess();
     } catch (err: unknown) {

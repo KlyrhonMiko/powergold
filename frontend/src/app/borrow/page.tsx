@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldCheck, CheckCircle2, X, Delete, Loader2 } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { posApi, BorrowCatalogItem } from './api';
 import { useInventoryWebSocket } from '@/hooks/useInventoryWebSocket';
 import type { ConfigRead } from '../inventory/items/api';
@@ -21,6 +21,7 @@ import {
 import { SelectionView } from './components/SelectionView';
 import { CheckoutView } from './components/CheckoutView';
 import { parseQuantityInput } from '@/lib/inventoryQuantity';
+import { useDebounce } from './lib/useDebounce';
 
 interface BorrowerTaxonomyData {
   categories: ConfigRead[];
@@ -28,6 +29,7 @@ interface BorrowerTaxonomyData {
 }
 
 type BorrowItemKind = 'trackable' | 'untrackable';
+const CATALOG_PAGE_SIZE = 40;
 
 export default function BorrowPage() {
   const router = useRouter();
@@ -51,12 +53,26 @@ export default function BorrowPage() {
   const [success, setSuccess] = useState(false);
   const [submittedByEmployeeName, setSubmittedByEmployeeName] = useState<string | null>(null);
   const [selectedItemKind] = useState<BorrowItemKind>('trackable');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const debouncedSearch = useDebounce(search, 300);
 
-  const { data: items = [], isLoading: isLoadingCatalog } = useQuery({
-    queryKey: ['borrow', 'catalog'],
-    queryFn: async () => {
-      const res = await posApi.listCatalog({ fetch_all: true });
-      return res.data;
+  const catalogQuery = useInfiniteQuery({
+    queryKey: ['borrow', 'catalog', selectedItemKind, debouncedSearch, selectedCategory],
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }) =>
+      await posApi.listCatalog({
+        page: pageParam,
+        per_page: CATALOG_PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        category: selectedCategory === 'All' ? undefined : selectedCategory,
+        is_trackable: selectedItemKind === 'trackable',
+      }),
+    getNextPageParam: (lastPage) => {
+      const meta = lastPage.meta;
+      if (!meta) return undefined;
+      const currentPage = meta.page ?? 1;
+      const loaded = meta.offset + lastPage.data.length;
+      return loaded < meta.total ? currentPage + 1 : undefined;
     },
   });
 
@@ -69,7 +85,14 @@ export default function BorrowPage() {
     refetchInterval: 300000, // 5 minutes for taxonomy
   });
 
-  const loading = isLoadingCatalog;
+  const loading = catalogQuery.isLoading;
+  const items = useMemo(
+    () => catalogQuery.data?.pages.flatMap((page) => page.data) ?? [],
+    [catalogQuery.data],
+  );
+  const totalItems = catalogQuery.data?.pages[0]?.meta?.total ?? items.length;
+  const hasMoreItems = Boolean(catalogQuery.hasNextPage);
+  const isLoadingMoreItems = catalogQuery.isFetchingNextPage;
 
   const categoryLabels = useMemo(() => {
     return Object.fromEntries((taxonomy?.categories ?? []).map((category) => [category.key, category.value]));
@@ -81,24 +104,14 @@ export default function BorrowPage() {
     );
   }, [taxonomy?.classifications]);
 
-  const categories = useMemo(() => {
-    const cats = new Set(items.map((i) => i.category).filter(Boolean));
-    return ['All', ...Array.from(cats).sort()];
-  }, [items]);
-
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const categories = useMemo(
+    () => ['All', ...(taxonomy?.categories ?? []).map((category) => category.key)],
+    [taxonomy?.categories],
+  );
 
   const filteredItems = useMemo(
-    () =>
-      items.filter((i) => {
-        const matchesKind = selectedItemKind === 'trackable' ? i.is_trackable : !i.is_trackable;
-        const matchesSearch =
-          i.name.toLowerCase().includes(search.toLowerCase()) ||
-          i.category.toLowerCase().includes(search.toLowerCase());
-        const matchesCategory = selectedCategory === 'All' || i.category === selectedCategory;
-        return matchesKind && matchesSearch && matchesCategory;
-      }),
-    [items, search, selectedCategory, selectedItemKind],
+    () => items,
+    [items],
   );
 
   const totalCartItems = cart.reduce((acc, curr) => acc + curr.cartQty, 0);
@@ -391,7 +404,12 @@ export default function BorrowPage() {
           onBack={() => router.push('/auth/login')}
           selectedCategory={selectedCategory}
           onCategoryChange={setSelectedCategory}
-          totalItems={items.length}
+          totalItems={totalItems}
+          hasMoreItems={hasMoreItems}
+          isLoadingMoreItems={isLoadingMoreItems}
+          onLoadMore={() => {
+            void catalogQuery.fetchNextPage();
+          }}
           cart={cart}
           totalCartItems={totalCartItems}
           onAddToCart={addToCart}

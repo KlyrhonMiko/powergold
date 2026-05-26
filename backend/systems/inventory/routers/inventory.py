@@ -52,6 +52,19 @@ def _to_inventory_item_read(session: Session, item) -> InventoryItemRead:
     return item_read
 
 
+def _to_inventory_item_reads(session: Session, items: list) -> list[InventoryItemRead]:
+    condition_map = inventory_service.get_item_condition_map(session, items)
+    reads: list[InventoryItemRead] = []
+    for item in items:
+        item_read = InventoryItemRead.model_validate(item)
+        item_read.total_qty = item.total_qty
+        item_read.available_qty = item.available_qty
+        item_read.condition = condition_map.get(item.id, "good")
+        item_read.status_condition = (item.status or "healthy").upper()
+        reads.append(item_read)
+    return reads
+
+
 @router.post(
     "",
     response_model=GenericResponse[InventoryItemRead],
@@ -115,9 +128,7 @@ async def list_items(
         is_trackable=is_trackable,
         include_deleted=include_deleted,
     )
-    items_read = []
-    for item in items:
-        items_read.append(_to_inventory_item_read(session, item))
+    items_read = _to_inventory_item_reads(session, items)
 
     return create_success_response(
         data=items_read,

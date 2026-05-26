@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from sqlalchemy import Index
 from sqlmodel import Field, Relationship
 
 from core.base_model import BaseModel
@@ -57,3 +58,17 @@ class BorrowRequestUnit(BaseModel, table=True):
         if self.inventory_unit:
             return self.inventory_unit.serial_number
         return None
+
+    __table_args__ = (
+        Index(
+            "ix_borrow_request_units_request_created",
+            "borrow_uuid",
+            "is_deleted",
+            "created_at",
+        ),
+        Index(
+            "ix_borrow_request_units_unit_active",
+            "unit_uuid",
+            "is_deleted",
+        ),
+    )

@@ -19,11 +19,11 @@ export interface BorrowCatalogItem {
 interface BorrowCatalogParams {
   page?: number;
   per_page?: number;
-  fetch_all?: boolean;
   search?: string;
   category?: string;
   item_type?: string;
   classification?: string;
+  is_trackable?: boolean;
   in_stock_only?: boolean;
 }
 

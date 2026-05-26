@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import Column, Numeric, text
+from sqlalchemy import Column, Index, Numeric, text
 from sqlmodel import Field, Relationship
 
 from core.base_model import BaseModel
@@ -47,3 +47,17 @@ class BorrowRequestBatch(BaseModel, table=True):
         if self.inventory_batch:
             return self.inventory_batch.batch_id
         return ""
+
+    __table_args__ = (
+        Index(
+            "ix_borrow_request_batches_request_created",
+            "borrow_uuid",
+            "is_deleted",
+            "created_at",
+        ),
+        Index(
+            "ix_borrow_request_batches_batch_active",
+            "batch_uuid",
+            "is_deleted",
+        ),
+    )

@@ -32,6 +32,9 @@ interface SelectionViewProps {
   selectedCategory: string;
   onCategoryChange: (v: string) => void;
   totalItems: number;
+  hasMoreItems: boolean;
+  isLoadingMoreItems: boolean;
+  onLoadMore: () => void;
   cart: CartItem[];
   totalCartItems: number;
   onAddToCart: (item: BorrowCatalogItem) => void;
@@ -54,6 +57,9 @@ export function SelectionView({
   selectedCategory,
   onCategoryChange,
   totalItems,
+  hasMoreItems,
+  isLoadingMoreItems,
+  onLoadMore,
   cart,
   totalCartItems,
   onAddToCart,
@@ -159,70 +165,93 @@ export function SelectionView({
                 <p className="text-xs lg:text-sm mt-1">Try adjusting your search or filters</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 lg:gap-4 pb-20 lg:pb-0">
-                {items.map((item) => {
-                  const inCart = cart.find((c) => c.item_id === item.item_id);
-                  const outOfStock = item.available_qty <= 0;
-                  const atStockLimit = Boolean(inCart && inCart.cartQty >= item.available_qty);
-                  return (
-                    <button
-                      key={item.item_id}
-                      onClick={() => onAddToCart(item)}
-                      disabled={outOfStock || atStockLimit}
-                      className={`group relative flex flex-col text-left p-3 lg:p-4 rounded-xl border bg-card transition-all duration-200
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5 lg:gap-4 pb-20 lg:pb-0">
+                  {items.map((item) => {
+                    const inCart = cart.find((c) => c.item_id === item.item_id);
+                    const outOfStock = item.available_qty <= 0;
+                    const atStockLimit = Boolean(inCart && inCart.cartQty >= item.available_qty);
+                    return (
+                      <button
+                        key={item.item_id}
+                        onClick={() => onAddToCart(item)}
+                        disabled={outOfStock || atStockLimit}
+                        className={`group relative flex flex-col text-left p-3 lg:p-4 rounded-xl border bg-card transition-all duration-200
                         ${outOfStock || atStockLimit
                           ? 'opacity-40 cursor-not-allowed grayscale'
                           : 'hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/30 active:translate-y-0 active:shadow-md active:scale-[0.98]'
                         }
                         ${inCart ? 'ring-2 ring-primary border-transparent shadow-md shadow-primary/10' : ''}`}
+                      >
+                        {inCart && (
+                          <div className="absolute -top-2 -right-2 lg:-top-2.5 lg:-right-2.5 w-6 h-6 lg:w-7 lg:h-7 rounded-full bg-primary text-primary-foreground text-[10px] lg:text-xs font-bold flex items-center justify-center shadow-md shadow-primary/30 animate-in zoom-in-50 duration-200">
+                            {formatQuantity(inCart.cartQty)}
+                          </div>
+                        )}
+
+                        <div className="flex-1">
+                          <div className="inline-flex items-center px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md text-[10px] lg:text-[11px] font-medium bg-muted/70 text-muted-foreground mb-2 lg:mb-3">
+                            {categoryLabels[item.category] || item.category}
+                          </div>
+                          {item.classification && (
+                            <div className="inline-flex items-center px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md text-[10px] lg:text-[11px] font-medium bg-primary/5 text-primary mb-2 lg:mb-3 ml-2 lg:ml-2.5">
+                              {classificationLabels[item.classification] || formatCategoryLabel(item.classification)}
+                            </div>
+                          )}
+                          <h3 className="font-medium text-xs lg:text-sm text-foreground leading-snug line-clamp-2">
+                            {item.name}
+                          </h3>
+                        </div>
+
+                        <div className="mt-3 lg:mt-4 flex items-end justify-between">
+                          <div>
+                            <p className="text-[10px] lg:text-[11px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wider">
+                              Available
+                            </p>
+                            <p
+                              className={`font-bold text-lg lg:text-xl leading-none ${outOfStock ? 'text-destructive' : 'text-foreground'
+                                }`}
+                            >
+                              {formatQuantity(item.available_qty)}
+                            </p>
+                          </div>
+
+                          {!outOfStock && (
+                            <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg lg:rounded-xl flex items-center justify-center transition-all duration-200 ${
+                              atStockLimit
+                                ? 'bg-muted/60 text-muted-foreground'
+                                : 'bg-muted/60 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-md'
+                            }`}>
+                              <Plus className="w-4 h-4 lg:w-5 lg:h-5" />
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {hasMoreItems && (
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      onClick={onLoadMore}
+                      disabled={isLoadingMoreItems}
+                      className="inline-flex h-11 items-center gap-2 rounded-xl border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {inCart && (
-                        <div className="absolute -top-2 -right-2 lg:-top-2.5 lg:-right-2.5 w-6 h-6 lg:w-7 lg:h-7 rounded-full bg-primary text-primary-foreground text-[10px] lg:text-xs font-bold flex items-center justify-center shadow-md shadow-primary/30 animate-in zoom-in-50 duration-200">
-                          {formatQuantity(inCart.cartQty)}
-                        </div>
+                      {isLoadingMoreItems ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading more
+                        </>
+                      ) : (
+                        <>
+                          Load more items
+                          <ChevronUp className="h-4 w-4 rotate-180" />
+                        </>
                       )}
-
-                      <div className="flex-1">
-                        <div className="inline-flex items-center px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md text-[10px] lg:text-[11px] font-medium bg-muted/70 text-muted-foreground mb-2 lg:mb-3">
-                          {categoryLabels[item.category] || item.category}
-                        </div>
-                        {item.classification && (
-                          <div className="inline-flex items-center px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-md text-[10px] lg:text-[11px] font-medium bg-primary/5 text-primary mb-2 lg:mb-3 ml-2 lg:ml-2.5">
-                            {classificationLabels[item.classification] || formatCategoryLabel(item.classification)}
-                          </div>
-                        )}
-                        <h3 className="font-medium text-xs lg:text-sm text-foreground leading-snug line-clamp-2">
-                          {item.name}
-                        </h3>
-                      </div>
-
-                      <div className="mt-3 lg:mt-4 flex items-end justify-between">
-                        <div>
-                          <p className="text-[10px] lg:text-[11px] text-muted-foreground mb-0.5 font-medium uppercase tracking-wider">
-                            Available
-                          </p>
-                          <p
-                            className={`font-bold text-lg lg:text-xl leading-none ${outOfStock ? 'text-destructive' : 'text-foreground'
-                              }`}
-                          >
-                            {formatQuantity(item.available_qty)}
-                          </p>
-                        </div>
-
-                        {!outOfStock && (
-                          <div className={`w-8 h-8 lg:w-10 lg:h-10 rounded-lg lg:rounded-xl flex items-center justify-center transition-all duration-200 ${
-                            atStockLimit
-                              ? 'bg-muted/60 text-muted-foreground'
-                              : 'bg-muted/60 text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:shadow-md'
-                          }`}>
-                            <Plus className="w-4 h-4 lg:w-5 lg:h-5" />
-                          </div>
-                        )}
-                      </div>
                     </button>
-                  );
-                })}
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

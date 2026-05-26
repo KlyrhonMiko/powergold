@@ -10,7 +10,9 @@ from core.schemas import GenericResponse, create_success_response, make_paginati
 from core.websockets import manager
 from systems.admin.models.user import User
 from systems.inventory.schemas.borrow_request_schemas import (
+    BorrowRequestAssignmentOptionsRead,
     BorrowRequestApprove,
+    BorrowRequestAssignmentsUpdate,
     BorrowRequestBatchAssign,
     BorrowRequestBatchRead,
     BorrowRequestClose,
@@ -61,6 +63,62 @@ async def create_request(
         return create_success_response(
             data=borrow_service.serialize_borrow_request(session, borrow_req),
             message="Borrow request created",
+            request=request,
+        )
+    except ValueError as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get(
+    "/requests/{request_id}/assignment-options",
+    response_model=GenericResponse[BorrowRequestAssignmentOptionsRead],
+    responses={404: {"model": GenericResponse}, 401: {"model": GenericResponse}},
+)
+async def get_assignment_options(
+    request_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
+):
+    try:
+        options = borrow_service.get_assignment_options(session, request_id)
+        return create_success_response(data=options, request=request)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.patch(
+    "/requests/{request_id}/assignments",
+    response_model=GenericResponse[BorrowRequestRead],
+    responses={
+        404: {"model": GenericResponse},
+        400: {"model": GenericResponse},
+        401: {"model": GenericResponse},
+    },
+)
+async def assign_request_inventory(
+    request_id: str,
+    payload: BorrowRequestAssignmentsUpdate,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
+):
+    try:
+        updated_request = borrow_service.assign_request_inventory(
+            session,
+            request_id=request_id,
+            assignments=payload.items,
+            actor_id=current_user.id,
+            note=payload.notes,
+        )
+        session.commit()
+        await manager.broadcast_catalog_update()
+        return create_success_response(
+            data=borrow_service.serialize_borrow_request(session, updated_request),
+            message="Inventory assigned to request",
             request=request,
         )
     except ValueError as e:
