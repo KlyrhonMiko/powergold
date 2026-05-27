@@ -6,7 +6,17 @@ const mockExportData = vi.fn();
 
 vi.mock('@/lib/api', () => ({
   api: {
-    get: vi.fn().mockImplementation(() => new Promise(() => {})),
+    get: vi.fn().mockImplementation((url: string) => {
+      if (url === '/inventory/data/borrowers') {
+        return Promise.resolve({
+          data: [
+            { user_id: 'BOR-1001', first_name: 'John', last_name: 'Doe' },
+            { user_id: 'BOR-1002', first_name: 'Jane', last_name: 'Smith' },
+          ],
+        });
+      }
+      return Promise.resolve({ data: [] });
+    }),
   },
 }));
 
@@ -166,7 +176,7 @@ describe('ImportExportSettings', () => {
     const serialField = within(section).getByRole('button', { name: 'Select an item first' });
     expect(serialField).toBeDisabled();
 
-    fireEvent.click(within(section).getByRole('button', { name: 'Select equipment...' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'Search equipment...' }));
     expect(screen.queryByRole('button', { name: /Cleaning Solvent/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
 
@@ -200,7 +210,7 @@ describe('ImportExportSettings', () => {
     const exportButton = within(section).getByRole('button', { name: 'Export Equipment History' });
     expect(exportButton).toBeDisabled();
 
-    fireEvent.click(within(section).getByRole('button', { name: 'Select equipment...' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'Search equipment...' }));
     fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
 
     expect(exportButton).toBeEnabled();
@@ -211,7 +221,7 @@ describe('ImportExportSettings', () => {
     expect(exportParams.item_id).toBe('ITEM-001');
   });
 
-  it('requires anchor date for rolling 7 day borrower export mode', () => {
+  it('requires week start date for weekly borrower export mode', () => {
     render(<ImportExportSettings />);
 
     const borrowerCard = screen.getByText('Borrow Request History').closest('div');
@@ -221,16 +231,16 @@ describe('ImportExportSettings', () => {
     const exportHistoryButton = within(borrowerSection).getByRole('button', { name: 'Export Borrow Request History' });
 
     fireEvent.click(within(borrowerSection).getByRole('button', { name: 'Select timeline' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rolling 7 Day' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly (Start Date)' }));
 
-    expect(within(borrowerSection).getByText('Anchor Date')).toBeInTheDocument();
+    expect(within(borrowerSection).getByText('Week Start Date')).toBeInTheDocument();
     expect(exportHistoryButton).toBeDisabled();
 
-    fireEvent.click(within(borrowerSection).getByRole('button', { name: 'Required for rolling 7 day' }));
+    fireEvent.click(within(borrowerSection).getByRole('button', { name: 'Required week start date' }));
     expect(exportHistoryButton).toBeEnabled();
   });
 
-  it('requires anchor date for rolling 7 day movement export mode', () => {
+  it('requires week start date for weekly movement export mode', () => {
     render(<ImportExportSettings />);
 
     const movementCard = screen.getByText('Equipment History').closest('div');
@@ -239,18 +249,59 @@ describe('ImportExportSettings', () => {
     const movementSection = movementCard as HTMLElement;
     const exportMovementsButton = within(movementSection).getByRole('button', { name: 'Export Equipment History' });
 
-    fireEvent.click(within(movementSection).getByRole('button', { name: 'Select equipment...' }));
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'Search equipment...' }));
     fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
 
     fireEvent.click(within(movementSection).getByRole('button', { name: 'Select timeline' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Rolling 7 Day' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Weekly (Start Date)' }));
 
-    expect(within(movementSection).getByText('Anchor Date')).toBeInTheDocument();
+    expect(within(movementSection).getByText('Week Start Date')).toBeInTheDocument();
     expect(exportMovementsButton).toBeDisabled();
 
-    fireEvent.click(within(movementSection).getByRole('button', { name: 'Required for rolling 7 day' }));
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'Required week start date' }));
 
     expect(exportMovementsButton).toBeEnabled();
+  });
+
+  it('uses month and year selectors for borrower and movement timeline exports', () => {
+    render(<ImportExportSettings />);
+
+    const borrowerCard = screen.getByText('Borrow Request History').closest('div');
+    const movementCard = screen.getByText('Equipment History').closest('div');
+    expect(borrowerCard).toBeTruthy();
+    expect(movementCard).toBeTruthy();
+
+    const borrowerSection = borrowerCard as HTMLElement;
+    const movementSection = movementCard as HTMLElement;
+
+    fireEvent.click(within(borrowerSection).getByRole('button', { name: 'Select timeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Monthly (Pick Month)' }));
+    expect(within(borrowerSection).getByLabelText('Month')).toBeInTheDocument();
+    const borrowerExportButton = within(borrowerSection).getByRole('button', { name: 'Export Borrow Request History' });
+    expect(borrowerExportButton).toBeDisabled();
+    fireEvent.change(within(borrowerSection).getByLabelText('Month'), { target: { value: '2026-03' } });
+    expect(borrowerExportButton).toBeEnabled();
+    fireEvent.click(borrowerExportButton);
+    expect(mockExportData).toHaveBeenLastCalledWith('requests', expect.objectContaining({
+      timeline_mode: 'monthly',
+      anchor_date: expect.any(Date),
+    }));
+
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'Search equipment...' }));
+    fireEvent.click(screen.getByRole('button', { name: /Tracked Camera/ }));
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'Select timeline' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yearly (Pick Year)' }));
+    expect(within(movementSection).getByLabelText('Year')).toBeInTheDocument();
+    const movementExportButton = within(movementSection).getByRole('button', { name: 'Export Equipment History' });
+    expect(movementExportButton).toBeDisabled();
+    fireEvent.change(within(movementSection).getByLabelText('Year'), { target: { value: '2026' } });
+    expect(movementExportButton).toBeEnabled();
+    fireEvent.click(movementExportButton);
+    expect(mockExportData).toHaveBeenLastCalledWith('movements', expect.objectContaining({
+      timeline_mode: 'yearly',
+      anchor_date: expect.any(Date),
+      item_id: 'ITEM-001',
+    }));
   });
 
   it('renders export data cards with history sections at the top and no scheduled exports block', () => {
@@ -261,5 +312,49 @@ describe('ImportExportSettings', () => {
     expect(screen.getByText('Inventory Catalog (Full State)')).toBeInTheDocument();
     expect(screen.getByText('Audit Logs')).toBeInTheDocument();
     expect(screen.queryByText('Scheduled Exports')).not.toBeInTheDocument();
+  });
+
+  it('exports the catalog with an explicit scope selection', () => {
+    render(<ImportExportSettings />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Inventory Types' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Materials (Untrackable)' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export Inventory Catalog' }));
+
+    expect(mockExportData).toHaveBeenCalledWith('catalog', {
+      format: 'xlsx',
+      catalog_scope: 'non_trackable',
+    });
+  });
+
+  it('supports searchable borrower, equipment, and serial selectors', async () => {
+    render(<ImportExportSettings />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'All Borrowers' }));
+    const borrowerSearch = screen.getByPlaceholderText('Type to search...');
+    fireEvent.change(borrowerSearch, { target: { value: 'Jane' } });
+    expect(await screen.findByRole('button', { name: /Jane Smith/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /John Doe/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Jane Smith/ }));
+    expect(screen.getByRole('button', { name: /Jane Smith/ })).toBeInTheDocument();
+
+    const movementCard = screen.getByText('Equipment History').closest('div');
+    expect(movementCard).toBeTruthy();
+    const movementSection = movementCard as HTMLElement;
+
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'Search equipment...' }));
+    const equipmentSearch = screen.getByPlaceholderText('Type to search...');
+    fireEvent.change(equipmentSearch, { target: { value: 'Scanner' } });
+    expect(screen.getByRole('button', { name: /Handheld Scanner/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Tracked Camera/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Handheld Scanner/ }));
+
+    fireEvent.click(within(movementSection).getByRole('button', { name: 'All Serials' }));
+    const serialSearch = screen.getByPlaceholderText('Type to search...');
+    fireEvent.change(serialSearch, { target: { value: '101' } });
+    expect(screen.getByRole('button', { name: /SN-101/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /SN-101/ }));
+    expect(within(movementSection).getByRole('button', { name: /SN-101/ })).toBeInTheDocument();
   });
 });

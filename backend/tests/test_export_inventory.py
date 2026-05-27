@@ -1,26 +1,32 @@
 import asyncio
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from openpyxl import load_workbook
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from core.models.audit_log import AuditLog
 from systems.admin.models.user import User
 from systems.inventory.models.borrow_request import BorrowRequest
 from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
 from systems.inventory.models.borrow_request_item import BorrowRequestItem
 from systems.inventory.models.borrow_request_unit import BorrowRequestUnit
+from systems.inventory.models.entrusted_item import EntrustedItem
 from systems.inventory.models.inventory import InventoryItem
 from systems.inventory.models.inventory_batch import InventoryBatch
 from systems.inventory.models.inventory_unit import InventoryUnit
 from systems.inventory.schemas.import_export_schemas import (
+    CatalogExportFilters,
+    CatalogExportScope,
     LedgerMovementsExportFilters,
     LedgerRequestsExportFilters,
+    TimelineMode,
 )
 from systems.inventory.services.export_service import ExportService
+from utils.time_utils import normalize_time_window
 
 
 @pytest.fixture
@@ -123,8 +129,8 @@ def _seed_export_fixture_data(session: Session) -> dict[str, str]:
         item_type="consumable",
         unit_of_measure="can",
         is_trackable=False,
-        total_qty=50,
-        available_qty=40,
+        total_qty=75,
+        available_qty=58,
     )
     session.add_all([equipment, materials])
     session.flush()
@@ -149,8 +155,17 @@ def _seed_export_fixture_data(session: Session) -> dict[str, str]:
         total_qty=50,
         available_qty=40,
         status="available",
+        description="Primary stock",
     )
-    session.add_all([unit_one, unit_two, batch_one])
+    batch_two = InventoryBatch(
+        batch_id="BATCH-002",
+        inventory_uuid=materials.id,
+        total_qty=25,
+        available_qty=18,
+        status="near_expiry",
+        description="Older stock",
+    )
+    session.add_all([unit_one, unit_two, batch_one, batch_two])
     session.flush()
 
     request_one = BorrowRequest(
@@ -235,6 +250,102 @@ def _seed_export_fixture_data(session: Session) -> dict[str, str]:
     }
 
 
+def _seed_audit_log_fixture_data(session: Session) -> None:
+    actor = User(
+        first_name="Audit",
+        last_name="Admin",
+        email="audit.admin@example.com",
+        username="audit-admin",
+        hashed_password="hashed",
+        role="admin",
+        employee_id="EMP-AUD-001",
+    )
+    session.add(actor)
+    session.flush()
+
+    session.add_all(
+        [
+            AuditLog(
+                audit_id="AUD-001",
+                entity_type="inventory",
+                entity_id="ITEM-TRACK-001",
+                action="create",
+                reason_code="seed",
+                actor_id=actor.id,
+            ),
+            AuditLog(
+                audit_id="AUD-002",
+                entity_type="borrow",
+                entity_id="REQ-001",
+                action="update",
+                reason_code="release",
+                actor_id=actor.id,
+            ),
+        ]
+    )
+    session.commit()
+
+
+def _seed_entrusted_export_fixture_data(session: Session) -> None:
+    assigned_by = User(
+        first_name="Asset",
+        last_name="Manager",
+        email="asset.manager@example.com",
+        username="asset-manager",
+        hashed_password="hashed",
+        role="admin",
+        employee_id="EMP-ENT-001",
+        user_id="ADM-ENT-001",
+    )
+    assigned_to = User(
+        first_name="Entrusted",
+        last_name="Employee",
+        email="entrusted.employee@example.com",
+        username="entrusted-employee",
+        hashed_password="hashed",
+        role="staff",
+        employee_id="EMP-ENT-002",
+        user_id="USR-ENT-002",
+    )
+    session.add_all([assigned_by, assigned_to])
+    session.flush()
+
+    item = InventoryItem(
+        item_id="ITEM-ENT-001",
+        name="Office Laptop",
+        category="electronics",
+        classification="equipment",
+        item_type="device",
+        is_trackable=True,
+        total_qty=1,
+        available_qty=0,
+    )
+    session.add(item)
+    session.flush()
+
+    unit = InventoryUnit(
+        unit_id="UNIT-ENT-001",
+        inventory_uuid=item.id,
+        serial_number="LAP-001",
+        status="entrusted",
+        condition="excellent",
+    )
+    session.add(unit)
+    session.flush()
+
+    session.add(
+        EntrustedItem(
+            assignment_id="ENT-001",
+            unit_uuid=unit.id,
+            user_id=assigned_to.id,
+            assigned_by=assigned_by.id,
+            assigned_at=datetime(2026, 5, 6, 9, 0, 0),
+            notes="Assigned for field work",
+        )
+    )
+    session.commit()
+
+
 def test_format_export_date(export_service: ExportService) -> None:
     result = export_service._format_export_date()
     assert result.count("-") == 2
@@ -245,8 +356,10 @@ def test_format_export_date(export_service: ExportService) -> None:
 
 
 def test_make_export_filename(export_service: ExportService) -> None:
-    filename = export_service._make_export_filename("borrow_request_report")
-    assert filename.startswith("borrow_request_report-")
+    filename = export_service._make_export_filename(
+        "John Doe - EMP-2025-001's Borrow Request History at Monthly(May 2026)"
+    )
+    assert filename == "john_doe_emp_2025_001s_borrow_request_history_at_monthly_may_2026"
 
 
 def test_build_borrower_label_with_user(export_service: ExportService) -> None:
@@ -306,6 +419,255 @@ def test_borrow_history_filter_allows_specified_borrower() -> None:
     assert filters.borrower_id == "user-1"
 
 
+def test_catalog_export_filter_defaults_to_all_scope() -> None:
+    filters = CatalogExportFilters(format="csv")
+    assert filters.catalog_scope == CatalogExportScope.ALL
+
+
+def test_normalize_time_window_uses_weekly_start_date_range() -> None:
+    window = normalize_time_window("weekly", anchor_date=date(2026, 4, 13))
+    assert window.date_from == datetime(2026, 4, 13, 0, 0, 0, tzinfo=window.date_from.tzinfo)
+    assert window.date_to == datetime(2026, 4, 19, 23, 59, 59, 999999, tzinfo=window.date_to.tzinfo)
+
+
+def test_normalize_time_window_treats_legacy_rolling_7_day_as_weekly() -> None:
+    window = normalize_time_window("rolling_7_day", anchor_date=date(2026, 4, 13))
+    assert window.date_from == datetime(2026, 4, 13, 0, 0, 0, tzinfo=window.date_from.tzinfo)
+    assert window.date_to == datetime(2026, 4, 19, 23, 59, 59, 999999, tzinfo=window.date_to.tzinfo)
+
+
+def test_normalize_time_window_uses_selected_month_boundaries() -> None:
+    window = normalize_time_window("monthly", anchor_date=date(2026, 2, 10))
+    assert window.date_from == datetime(2026, 2, 1, 0, 0, 0, tzinfo=window.date_from.tzinfo)
+    assert window.date_to == datetime(2026, 2, 28, 23, 59, 59, 999999, tzinfo=window.date_to.tzinfo)
+
+
+def test_normalize_time_window_uses_selected_year_boundaries() -> None:
+    window = normalize_time_window("yearly", anchor_date=date(2026, 7, 4))
+    assert window.date_from == datetime(2026, 1, 1, 0, 0, 0, tzinfo=window.date_from.tzinfo)
+    assert window.date_to == datetime(2026, 12, 31, 23, 59, 59, 999999, tzinfo=window.date_to.tzinfo)
+
+
+def test_catalog_export_csv_can_be_limited_to_trackable_items(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_export_fixture_data(session)
+
+    response = export_service.export_inventory(
+        session=session,
+        format="csv",
+        catalog_scope=CatalogExportScope.TRACKABLE,
+    )
+
+    rows = _parse_csv_response(response)
+    assert rows[0] == [
+        "name",
+        "category",
+        "classification",
+        "item_type",
+        "unit_of_measure",
+        "description",
+        "condition",
+        "quantity",
+        "serial_number",
+        "expiration_date",
+    ]
+    data_rows = rows[1:]
+
+    assert data_rows
+    assert {row[0] for row in data_rows} == {"Tracked Camera"}
+    assert {row[8] for row in data_rows} == {"SN/001", "SN-002"}
+
+
+def test_catalog_export_xlsx_materials_include_batch_detail_sheet(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_export_fixture_data(session)
+
+    response = export_service.export_inventory(
+        session=session,
+        format="xlsx",
+        catalog_scope=CatalogExportScope.NON_TRACKABLE,
+    )
+
+    workbook = _parse_workbook_response(response)
+    catalog_sheet = workbook["Materials Catalog"]
+    batch_sheet = workbook["Material Batches"]
+
+    assert workbook.sheetnames == ["Materials Catalog", "Material Batches"]
+    assert catalog_sheet["A1"].value == export_service._decorate_export_title("Materials Catalog")
+    assert [catalog_sheet.cell(row=2, column=index).value for index in range(1, 11)] == [
+        "name",
+        "category",
+        "classification",
+        "item_type",
+        "unit_of_measure",
+        "description",
+        "condition",
+        "quantity",
+        "serial_number",
+        "expiration_date",
+    ]
+    catalog_rows = list(catalog_sheet.iter_rows(min_row=3, values_only=True))
+    assert catalog_rows
+    assert {row[0] for row in catalog_rows} == {"Cleaning Solvent"}
+    assert {row[6] for row in catalog_rows} == {"available", "near_expiry"}
+    assert {row[7] for row in catalog_rows} == {"50", "25"}
+
+    batch_rows = list(batch_sheet.iter_rows(min_row=3, values_only=True))
+    assert len(batch_rows) == 2
+    batch_rows_by_id = {row[2]: row for row in batch_rows}
+    assert batch_rows_by_id["BATCH-001"][:9] == ("ITEM-BULK-001", "Cleaning Solvent", "BATCH-001", "can", "available", "available", "50", "40", None)
+    assert batch_rows_by_id["BATCH-001"][9]
+    assert batch_rows_by_id["BATCH-001"][10] == "Primary stock"
+    assert batch_rows_by_id["BATCH-002"][:9] == ("ITEM-BULK-001", "Cleaning Solvent", "BATCH-002", "can", "near_expiry", "near_expiry", "25", "18", None)
+    assert batch_rows_by_id["BATCH-002"][9]
+    assert batch_rows_by_id["BATCH-002"][10] == "Older stock"
+
+
+def test_catalog_export_v2_summary_and_batches_reflect_material_scope(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_export_fixture_data(session)
+
+    response = export_service.export_inventory(
+        session=session,
+        format="xlsx",
+        report_version="v2",
+        catalog_scope=CatalogExportScope.NON_TRACKABLE,
+    )
+
+    workbook = _parse_workbook_response(response)
+    summary_sheet = workbook["Summary"]
+
+    summary_values = list(summary_sheet.iter_rows(min_row=3, values_only=True))
+    assert ("Report", "Materials Catalog") in summary_values
+    assert ("Catalog Scope", "non_trackable") in summary_values
+    assert ("Batch Rows", 2) in summary_values
+    assert workbook.sheetnames == ["Summary", "Materials Catalog", "Material Batches"]
+
+
+def test_catalog_export_xlsx_trackable_uses_equipment_catalog_title(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_export_fixture_data(session)
+
+    response = export_service.export_inventory(
+        session=session,
+        format="xlsx",
+        catalog_scope=CatalogExportScope.TRACKABLE,
+    )
+
+    workbook = _parse_workbook_response(response)
+    catalog_sheet = workbook["Equipment Catalog"]
+
+    assert workbook.sheetnames == ["Equipment Catalog"]
+    assert catalog_sheet["A1"].value == export_service._decorate_export_title("Equipment Catalog")
+    assert response.headers["Content-Disposition"] == "attachment; filename=equipment_catalog.xlsx"
+
+
+def test_catalog_export_xlsx_all_uses_inventory_catalog_title(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_export_fixture_data(session)
+
+    response = export_service.export_inventory(
+        session=session,
+        format="xlsx",
+        catalog_scope=CatalogExportScope.ALL,
+    )
+
+    workbook = _parse_workbook_response(response)
+    catalog_sheet = workbook["Inventory Catalog"]
+
+    assert workbook.sheetnames == ["Inventory Catalog", "Material Batches"]
+    assert catalog_sheet["A1"].value == export_service._decorate_export_title("Inventory Catalog")
+    assert response.headers["Content-Disposition"] == "attachment; filename=inventory_catalog.xlsx"
+
+
+def test_audit_logs_xlsx_uses_shared_single_sheet_title_and_headers(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_audit_log_fixture_data(session)
+
+    response = export_service.export_audit_logs(
+        session=session,
+        format="xlsx",
+    )
+
+    workbook = _parse_workbook_response(response)
+    sheet = workbook["Audit Logs Report"]
+
+    assert workbook.sheetnames == ["Audit Logs Report"]
+    assert sheet["A1"].value == export_service._decorate_export_title("Audit Logs Report")
+    assert response.headers["Content-Disposition"] == "attachment; filename=audit_logs_report.xlsx"
+    assert [sheet.cell(row=2, column=index).value for index in range(1, 8)] == [
+        "ID",
+        "Action",
+        "Entity ID",
+        "Entity Type",
+        "Actor",
+        "Timestamp",
+        "Reason",
+    ]
+
+
+def test_entrusted_items_xlsx_uses_shared_single_sheet_title_and_headers(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_entrusted_export_fixture_data(session)
+
+    response = export_service.export_entrusted(
+        session=session,
+        format="xlsx",
+    )
+
+    workbook = _parse_workbook_response(response)
+    sheet = workbook["Entrusted Items Report"]
+
+    assert workbook.sheetnames == ["Entrusted Items Report"]
+    assert sheet["A1"].value == export_service._decorate_export_title("Entrusted Items Report")
+    assert response.headers["Content-Disposition"] == "attachment; filename=entrusted_items_report.xlsx"
+    assert [sheet.cell(row=2, column=index).value for index in range(1, 10)] == [
+        "Assignment ID",
+        "Item Name",
+        "Serial Number",
+        "Assigned To Name",
+        "Assigned To ID",
+        "Assigned At",
+        "Returned At",
+        "Status",
+        "Notes",
+    ]
+    assert sheet.freeze_panes == "A3"
+
+
+def test_audit_logs_v2_xlsx_uses_shared_summary_and_detail_titles(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_audit_log_fixture_data(session)
+
+    response = export_service.export_audit_logs(
+        session=session,
+        format="xlsx",
+        report_version="v2",
+    )
+
+    workbook = _parse_workbook_response(response)
+
+    assert workbook.sheetnames == ["Summary", "Audit Logs"]
+    assert workbook["Summary"]["A1"].value == export_service._decorate_export_title("Summary")
+    assert workbook["Audit Logs"]["A1"].value == export_service._decorate_export_title("Audit Logs")
+
+
 def test_borrow_history_csv_contains_simplified_rows(
     export_service: ExportService,
     session: Session,
@@ -349,7 +711,7 @@ def test_borrow_history_csv_contains_simplified_rows(
     ]
     assert ["05/01/2026", "REQ-001", "John Doe - EMP-2025-001", "Tracked Camera", "SN/001", "", "1", "1", "0", "Fully Returned", "returned", "", "N/A", "2026-05-01 10:05:00", "Release Officer - EMP-REL-001", "2026-05-03 15:05:00", "Return Officer - EMP-RET-001"] in rows[1:]
     assert ["05/01/2026", "REQ-001", "John Doe - EMP-2025-001", "Cleaning Solvent", "BATCH-001", "can", "5", "5", "0", "Fully Returned", "returned", "", "N/A", "2026-05-01 10:10:00", "Release Officer - EMP-REL-001", "2026-05-03 15:10:00", "Return Officer - EMP-RET-001"] in rows[1:]
-    assert response.headers["Content-Disposition"].startswith("attachment; filename=borrow_request_report-")
+    assert response.headers["Content-Disposition"] == "attachment; filename=all_borrow_request_history.csv"
 
 
 def test_borrow_history_xlsx_groups_by_borrower_when_filter_is_absent(
@@ -375,6 +737,14 @@ def test_borrow_history_xlsx_groups_by_borrower_when_filter_is_absent(
 
     workbook = _parse_workbook_response(response)
     assert sorted(workbook.sheetnames) == ["Jane Smith - EMP-2025-002", "John Doe - EMP-2025-001"]
+    borrower_sheet = workbook["John Doe - EMP-2025-001"]
+    assert borrower_sheet["A1"].value == export_service._decorate_export_title("All Borrow Request History")
+    assert response.headers["Content-Disposition"] == "attachment; filename=all_borrow_request_history.xlsx"
+    assert [borrower_sheet.cell(row=2, column=index).value for index in range(1, 4)] == [
+        "Request Date",
+        "Request ID",
+        "Borrower's Name + Employee ID",
+    ]
 
 
 def test_borrow_history_xlsx_uses_safe_sheet_names_when_borrower_is_specified(
@@ -400,6 +770,35 @@ def test_borrow_history_xlsx_uses_safe_sheet_names_when_borrower_is_specified(
 
     workbook = _parse_workbook_response(response)
     assert workbook.sheetnames == ["Trackable-Equipments", "Untrackable-Materials"]
+    assert workbook["Trackable-Equipments"]["A1"].value == export_service._decorate_export_title("John Doe - EMP-2025-001's Borrow Request History")
+    assert workbook["Untrackable-Materials"]["A1"].value == export_service._decorate_export_title("John Doe - EMP-2025-001's Borrow Request History")
+    assert response.headers["Content-Disposition"] == "attachment; filename=john_doe_emp_2025_001s_borrow_request_history.xlsx"
+
+
+def test_borrow_history_xlsx_title_includes_timeline_context(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    _seed_export_fixture_data(session)
+
+    response = export_service._export_borrow_history_v2(
+        session=session,
+        format="xlsx",
+        status=None,
+        item_id=None,
+        borrower_id=None,
+        serial_number=None,
+        timeline_mode=TimelineMode.WEEKLY,
+        anchor_date=date(2026, 5, 1),
+        date_from=None,
+        date_to=None,
+        include_deleted=False,
+        include_archived=False,
+    )
+
+    workbook = _parse_workbook_response(response)
+    borrower_sheet = workbook["John Doe - EMP-2025-001"]
+    assert borrower_sheet["A1"].value == export_service._decorate_export_title("All Borrow Request History at Weekly(May 01, 2026)")
 
 
 def test_equipment_history_csv_contains_simplified_rows(
@@ -434,7 +833,7 @@ def test_equipment_history_csv_contains_simplified_rows(
         "Status on Return",
     ]
     assert ["SN/001", "REQ-001", "05/01/2026", "John Doe - EMP-2025-001", "good", "2026-05-01 10:05:00", "2026-05-03 15:05:00", "fair"] in rows[1:]
-    assert response.headers["Content-Disposition"].startswith("attachment; filename=equipment_histry_report-")
+    assert response.headers["Content-Disposition"] == "attachment; filename=tracked_camera_equipment_history.csv"
 
 
 def test_equipment_history_xlsx_groups_per_serial_with_safe_sheet_names(
@@ -459,3 +858,36 @@ def test_equipment_history_xlsx_groups_per_serial_with_safe_sheet_names(
 
     workbook = _parse_workbook_response(response)
     assert workbook.sheetnames == ["SN-001", "SN-002"]
+    serial_sheet = workbook["SN-001"]
+    assert serial_sheet["A1"].value == export_service._decorate_export_title("Tracked Camera Equipment History")
+    assert response.headers["Content-Disposition"] == "attachment; filename=tracked_camera_equipment_history.xlsx"
+    assert [serial_sheet.cell(row=2, column=index).value for index in range(1, 4)] == [
+        "Serial Number",
+        "Request ID Reference",
+        "Request Date",
+    ]
+
+
+def test_equipment_history_xlsx_title_includes_serial_and_timeline_context(
+    export_service: ExportService,
+    session: Session,
+) -> None:
+    ids = _seed_export_fixture_data(session)
+
+    response = export_service._export_movements_v2(
+        session=session,
+        format="xlsx",
+        movement_type=None,
+        item_id=ids["equipment_item_id"],
+        serial_number=ids["serial_one"],
+        timeline_mode=TimelineMode.YEARLY,
+        anchor_date=date(2026, 1, 1),
+        date_from=None,
+        date_to=None,
+        include_deleted=False,
+        include_archived=False,
+    )
+
+    workbook = _parse_workbook_response(response)
+    serial_sheet = workbook["SN-001"]
+    assert serial_sheet["A1"].value == export_service._decorate_export_title("Tracked Camera Equipment History for SN/001 at Yearly(2026)")

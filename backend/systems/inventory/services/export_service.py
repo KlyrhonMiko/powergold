@@ -1,13 +1,14 @@
 import io
 import csv
 import json
+import re
 from collections import defaultdict
 from datetime import date, datetime
 from typing import List, Any, Optional
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import aliased
 from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlmodel import Session, select
 from fastapi.responses import StreamingResponse
 
@@ -19,7 +20,7 @@ from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
 from systems.inventory.models.inventory import InventoryItem
 from systems.inventory.models.inventory_unit import InventoryUnit
 from systems.inventory.models.inventory_batch import InventoryBatch
-from systems.inventory.schemas.import_export_schemas import TimelineMode
+from systems.inventory.schemas.import_export_schemas import CatalogExportScope, TimelineMode
 from systems.inventory.quantity import format_quantity
 from utils.time_utils import normalize_time_window
 
@@ -60,6 +61,9 @@ class ExportService:
         "serial_numbers",
         "batch_details",
     )
+    _TITLE_FILL = PatternFill(fill_type="solid", fgColor="1D4ED8")
+    _HEADER_FILL = PatternFill(fill_type="solid", fgColor="DBEAFE")
+    _ALT_ROW_FILL = PatternFill(fill_type="solid", fgColor="F8FAFC")
 
     def _sanitize_export_cell(self, value: Any) -> Any:
         if not isinstance(value, str) or not value:
@@ -363,8 +367,19 @@ class ExportService:
         now = datetime.now()
         return now.strftime("%m-%d-%Y")
 
-    def _make_export_filename(self, report_name: str) -> str:
-        return f"{report_name}-{self._format_export_date()}"
+    def _format_export_date_label(self) -> str:
+        now = datetime.now()
+        return now.strftime("%B %d, %Y")
+
+    def _decorate_export_title(self, title: str) -> str:
+        return f"{title} (Exported: {self._format_export_date_label()})"
+
+    def _make_export_filename(self, report_title: str) -> str:
+        normalized = report_title.strip().lower().replace("&", " and ")
+        normalized = normalized.replace("'", "")
+        normalized = re.sub(r"[^a-z0-9]+", "_", normalized)
+        normalized = normalized.strip("_")
+        return normalized or "export"
 
     def _sanitize_sheet_title(self, value: str) -> str:
         sanitized = "".join("-" if char in self._INVALID_SHEET_TITLE_CHARS else char for char in value)
@@ -400,27 +415,297 @@ class ExportService:
             rows.extend([[key, value if value is not None else ""] for key, value in extra_filters.items()])
         return rows
 
+    def _format_export_title(self, value: str) -> str:
+        return value.replace("_", " ").strip().title()
+
+    def _format_possessive_label(self, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            return stripped
+        return f"{stripped}'" if stripped.lower().endswith("s") else f"{stripped}'s"
+
+    def _format_timeline_title_suffix(
+        self,
+        timeline_mode: TimelineMode | None,
+        anchor_date: date | None,
+    ) -> str:
+        mode_value = getattr(timeline_mode, "value", timeline_mode)
+        if mode_value == "rolling_7_day":
+            mode_value = "weekly"
+        if not mode_value:
+            return ""
+
+        if mode_value == "weekly":
+            label = anchor_date.strftime("%B %d, %Y") if anchor_date else "Current Week"
+            return f" at Weekly({label})"
+        if mode_value == "monthly":
+            label = anchor_date.strftime("%B %Y") if anchor_date else "Current Month"
+            return f" at Monthly({label})"
+        if mode_value == "yearly":
+            label = anchor_date.strftime("%Y") if anchor_date else "Current Year"
+            return f" at Yearly({label})"
+        if mode_value == "daily":
+            label = anchor_date.strftime("%B %d, %Y") if anchor_date else "Current Date"
+            return f" at Daily({label})"
+        return f" at {str(mode_value).title()}"
+
+    def _build_borrow_history_title(
+        self,
+        borrower_label: str | None,
+        timeline_mode: TimelineMode | None,
+        anchor_date: date | None,
+    ) -> str:
+        base_title = (
+            "All Borrow Request History"
+            if not borrower_label
+            else f"{self._format_possessive_label(borrower_label)} Borrow Request History"
+        )
+        return f"{base_title}{self._format_timeline_title_suffix(timeline_mode, anchor_date)}"
+
+    def _build_equipment_history_title(
+        self,
+        item_label: str,
+        serial_number: str | None,
+        timeline_mode: TimelineMode | None,
+        anchor_date: date | None,
+    ) -> str:
+        base_title = f"{item_label} Equipment History"
+        if serial_number:
+            base_title = f"{base_title} for {serial_number}"
+        return f"{base_title}{self._format_timeline_title_suffix(timeline_mode, anchor_date)}"
+
+    def _populate_sheet(
+        self,
+        ws: Any,
+        title: str,
+        headers: list[str],
+        rows: list[list[Any]],
+    ) -> None:
+        title_text = self._sanitize_export_cell(self._decorate_export_title(title))
+        sanitized_headers = [self._sanitize_export_cell(header) for header in headers]
+        sanitized_rows = self._sanitize_export_rows(rows)
+        total_columns = max(len(sanitized_headers), 1)
+
+        ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=total_columns)
+        title_cell = ws.cell(row=1, column=1, value=title_text)
+        title_cell.font = Font(bold=True, color="FFFFFF", size=14)
+        title_cell.alignment = Alignment(horizontal="center")
+        title_cell.fill = self._TITLE_FILL
+
+        header_row = 2
+        for col, header in enumerate(sanitized_headers, 1):
+            cell = ws.cell(row=header_row, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+            cell.fill = self._HEADER_FILL
+
+        data_start_row = header_row + 1
+        for row_offset, row_data in enumerate(sanitized_rows):
+            row_number = data_start_row + row_offset
+            is_alt_row = row_offset % 2 == 1
+            for col_idx, value in enumerate(row_data, 1):
+                cell = ws.cell(row=row_number, column=col_idx, value=value)
+                cell.alignment = Alignment(vertical="top")
+                if is_alt_row:
+                    cell.fill = self._ALT_ROW_FILL
+
+        ws.freeze_panes = f"A{data_start_row}"
+        ws.auto_filter.ref = f"A{header_row}:{ws.cell(row=header_row, column=total_columns).coordinate}"
+
+        for column_index in range(1, total_columns + 1):
+            max_length = 0
+            column_letter = ws.cell(row=header_row, column=column_index).column_letter
+            for cell in ws.iter_rows(
+                min_row=1,
+                max_row=ws.max_row,
+                min_col=column_index,
+                max_col=column_index,
+            ):
+                current_cell = cell[0]
+                if current_cell.value is None:
+                    continue
+                max_length = max(max_length, len(str(current_cell.value)))
+            ws.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 40)
+
+    def _resolve_batch_condition(self, batch: InventoryBatch) -> str:
+        raw_condition = getattr(batch, "condition", None)
+        if raw_condition:
+            return str(raw_condition)
+        return batch.status or ""
+
+    def _get_inventory_catalog_title(self, catalog_scope: CatalogExportScope) -> str:
+        if catalog_scope == CatalogExportScope.TRACKABLE:
+            return "Equipment Catalog"
+        if catalog_scope == CatalogExportScope.NON_TRACKABLE:
+            return "Materials Catalog"
+        return "Inventory Catalog"
+
+    def _collect_inventory_export_data(
+        self,
+        session: Session,
+        catalog_scope: CatalogExportScope,
+        date_from: datetime | None,
+        date_to: datetime | None,
+        include_deleted: bool,
+        include_archived: bool,
+    ) -> tuple[list[InventoryItem], list[list[Any]], list[list[Any]], int, int]:
+        items_statement = self._apply_visibility_filters(
+            select(InventoryItem),
+            InventoryItem,
+            include_deleted,
+            include_archived,
+        )
+        if catalog_scope == CatalogExportScope.TRACKABLE:
+            items_statement = items_statement.where(InventoryItem.is_trackable.is_(True))
+        elif catalog_scope == CatalogExportScope.NON_TRACKABLE:
+            items_statement = items_statement.where(InventoryItem.is_trackable.is_(False))
+        items_statement = self._apply_datetime_window(
+            items_statement,
+            InventoryItem.created_at,
+            date_from,
+            date_to,
+        )
+        items = self._execute_bounded_query(
+            session,
+            items_statement,
+            self._MAX_EXPORT_ITEMS,
+            "inventory items",
+        )
+
+        trackable_item_ids = [item.id for item in items if item.is_trackable]
+        non_trackable_item_ids = [item.id for item in items if not item.is_trackable]
+
+        units_by_item_id: dict[Any, list[InventoryUnit]] = defaultdict(list)
+        if trackable_item_ids:
+            units_statement = self._apply_visibility_filters(
+                select(InventoryUnit).where(InventoryUnit.inventory_uuid.in_(trackable_item_ids)),
+                InventoryUnit,
+                include_deleted,
+                include_archived,
+            )
+            units = self._execute_bounded_query(
+                session,
+                units_statement,
+                self._MAX_EXPORT_ROWS,
+                "inventory units",
+            )
+            for unit in units:
+                units_by_item_id[unit.inventory_uuid].append(unit)
+
+        batches_by_item_id: dict[Any, list[InventoryBatch]] = defaultdict(list)
+        if non_trackable_item_ids:
+            batches_statement = self._apply_visibility_filters(
+                select(InventoryBatch).where(InventoryBatch.inventory_uuid.in_(non_trackable_item_ids)),
+                InventoryBatch,
+                include_deleted,
+                include_archived,
+            )
+            batches = self._execute_bounded_query(
+                session,
+                batches_statement,
+                self._MAX_EXPORT_ROWS,
+                "inventory batches",
+            )
+            for batch in batches:
+                batches_by_item_id[batch.inventory_uuid].append(batch)
+
+        catalog_rows: list[list[Any]] = []
+        material_batch_rows: list[list[Any]] = []
+
+        for item in items:
+            if item.is_trackable:
+                units = units_by_item_id.get(item.id, [])
+                if not units:
+                    self._append_inventory_row(catalog_rows, [
+                        item.name,
+                        item.category or "",
+                        item.classification or "",
+                        item.item_type or "",
+                        "",
+                        "",
+                        "",
+                        "0",
+                        "",
+                        "",
+                    ])
+                for unit in units:
+                    self._append_inventory_row(catalog_rows, [
+                        item.name,
+                        item.category or "",
+                        item.classification or "",
+                        item.item_type or "",
+                        "",
+                        unit.description or "",
+                        unit.condition or "",
+                        "1",
+                        unit.serial_number or "",
+                        unit.expiration_date.isoformat() if unit.expiration_date else "",
+                    ])
+            else:
+                batches = batches_by_item_id.get(item.id, [])
+                if not batches:
+                    self._append_inventory_row(catalog_rows, [
+                        item.name,
+                        item.category or "",
+                        item.classification or "",
+                        item.item_type or "",
+                        item.unit_of_measure or "",
+                        "",
+                        "",
+                        "0",
+                        "",
+                        "",
+                    ])
+                for batch in batches:
+                    batch_condition = self._resolve_batch_condition(batch)
+                    self._append_inventory_row(catalog_rows, [
+                        item.name,
+                        item.category or "",
+                        item.classification or "",
+                        item.item_type or "",
+                        item.unit_of_measure or "",
+                        batch.description or "",
+                        batch_condition,
+                        format_quantity(batch.total_qty),
+                        "",
+                        batch.expiration_date.isoformat() if batch.expiration_date else "",
+                    ])
+                    material_batch_rows.append([
+                        item.item_id,
+                        item.name,
+                        batch.batch_id,
+                        item.unit_of_measure or "",
+                        batch_condition,
+                        batch.status or "",
+                        format_quantity(batch.total_qty),
+                        format_quantity(batch.available_qty),
+                        batch.expiration_date.isoformat() if batch.expiration_date else "",
+                        self._format_optional_timestamp(batch.received_at),
+                        batch.description or "",
+                    ])
+
+        unit_row_count = sum(len(units) for units in units_by_item_id.values())
+        batch_row_count = sum(len(batches) for batches in batches_by_item_id.values())
+        return items, catalog_rows, material_batch_rows, unit_row_count, batch_row_count
+
     def _create_multi_sheet_response(
         self,
-        sheets: list[tuple[str, list[str], list[list[Any]]]],
-        report_name: str,
+        sheets: list[tuple[str, list[str], list[list[Any]]] | tuple[str, list[str], list[list[Any]], str]],
+        filename_title: str,
     ) -> StreamingResponse:
-        filename = self._make_export_filename(report_name)
+        filename = self._make_export_filename(filename_title)
         wb = Workbook()
         default_sheet = wb.active
         wb.remove(default_sheet)
 
-        for sheet_name, headers, rows in sheets:
+        for sheet_spec in sheets:
+            if len(sheet_spec) == 4:
+                sheet_name, headers, rows, display_title = sheet_spec
+            else:
+                sheet_name, headers, rows = sheet_spec
+                display_title = sheet_name
             ws = wb.create_sheet(title=self._sanitize_sheet_title(sheet_name))
-            sanitized_headers = [self._sanitize_export_cell(header) for header in headers]
-            sanitized_rows = self._sanitize_export_rows(rows)
-            for col, header in enumerate(sanitized_headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal="center")
-            for row_idx, row_data in enumerate(sanitized_rows, 2):
-                for col_idx, value in enumerate(row_data, 1):
-                    ws.cell(row=row_idx, column=col_idx, value=value)
+            self._populate_sheet(ws, display_title, headers, rows)
 
         output = io.BytesIO()
         wb.save(output)
@@ -535,14 +820,15 @@ class ExportService:
             ]
             for log in logs
         ]
-        
-        return self._create_response(headers, data, format, "audit_logs_report")
+
+        return self._create_response(headers, data, format, "Audit Logs Report")
 
     def export_inventory(
         self, 
         session: Session, 
         format: str,
         report_version: str = "v1",
+        catalog_scope: CatalogExportScope = CatalogExportScope.ALL,
         timeline_mode: TimelineMode | None = None,
         anchor_date: date | None = None,
         date_from: datetime | None = None,
@@ -561,6 +847,7 @@ class ExportService:
             return self._export_inventory_v2(
                 session=session,
                 format=format,
+                catalog_scope=catalog_scope,
                 timeline_mode=timeline_mode,
                 anchor_date=anchor_date,
                 date_from=normalized_from_date,
@@ -569,135 +856,39 @@ class ExportService:
                 include_archived=include_archived,
             )
 
-        headers = ["name", "category", "classification", "item_type", "unit_of_measure", "is_trackable", "description", "condition", "quantity", "serial_number", "expiration_date"]
-        
-        # We export a row for each unit (if trackable) or each batch (if not)
-        data = []
-        items_statement = self._apply_visibility_filters(
-            select(InventoryItem),
-            InventoryItem,
-            include_deleted,
-            include_archived,
+        headers = ["name", "category", "classification", "item_type", "unit_of_measure", "description", "condition", "quantity", "serial_number", "expiration_date"]
+        batch_headers = [
+            "item_id",
+            "name",
+            "batch_id",
+            "unit_of_measure",
+            "condition",
+            "status",
+            "total_quantity",
+            "available_quantity",
+            "expiration_date",
+            "received_at",
+            "description",
+        ]
+        items, catalog_rows, material_batch_rows, _, _ = self._collect_inventory_export_data(
+            session=session,
+            catalog_scope=catalog_scope,
+            date_from=normalized_from_date,
+            date_to=normalized_to_date,
+            include_deleted=include_deleted,
+            include_archived=include_archived,
         )
-        items_statement = self._apply_datetime_window(
-            items_statement,
-            InventoryItem.created_at,
-            normalized_from_date,
-            normalized_to_date,
-        )
-        items = self._execute_bounded_query(
-            session,
-            items_statement,
-            self._MAX_EXPORT_ITEMS,
-            "inventory items",
-        )
+        catalog_title = self._get_inventory_catalog_title(catalog_scope)
 
-        trackable_item_ids = [item.id for item in items if item.is_trackable]
-        non_trackable_item_ids = [item.id for item in items if not item.is_trackable]
+        if format == "csv":
+            return self._create_response(headers, catalog_rows, format, catalog_title)
 
-        units_by_item_id: dict[Any, list[InventoryUnit]] = defaultdict(list)
-        if trackable_item_ids:
-            units_statement = select(InventoryUnit).where(
-                InventoryUnit.inventory_uuid.in_(trackable_item_ids)
-            )
-            units_statement = self._apply_visibility_filters(
-                units_statement,
-                InventoryUnit,
-                include_deleted,
-                include_archived,
-            )
-            units = self._execute_bounded_query(
-                session,
-                units_statement,
-                self._MAX_EXPORT_ROWS,
-                "inventory units",
-            )
-            for unit in units:
-                units_by_item_id[unit.inventory_uuid].append(unit)
-
-        batches_by_item_id: dict[Any, list[InventoryBatch]] = defaultdict(list)
-        if non_trackable_item_ids:
-            batches_statement = select(InventoryBatch).where(
-                InventoryBatch.inventory_uuid.in_(non_trackable_item_ids)
-            )
-            batches_statement = self._apply_visibility_filters(
-                batches_statement,
-                InventoryBatch,
-                include_deleted,
-                include_archived,
-            )
-            batches = self._execute_bounded_query(
-                session,
-                batches_statement,
-                self._MAX_EXPORT_ROWS,
-                "inventory batches",
-            )
-            for batch in batches:
-                batches_by_item_id[batch.inventory_uuid].append(batch)
-
-        for item in items:
-            if item.is_trackable:
-                units = units_by_item_id.get(item.id, [])
-                if not units:
-                    self._append_inventory_row(data, [
-                        item.name,
-                        item.category or "",
-                        item.classification or "",
-                        item.item_type or "",
-                        "",
-                        "true",
-                        "",
-                        "",
-                        "0",
-                        "",
-                        ""
-                    ])
-                for unit in units:
-                    self._append_inventory_row(data, [
-                        item.name,
-                        item.category or "",
-                        item.classification or "",
-                        item.item_type or "",
-                        "",
-                        "true",
-                        unit.description or "",
-                        unit.condition,
-                        "1",
-                        unit.serial_number,
-                        unit.expiration_date.isoformat() if unit.expiration_date else ""
-                    ])
-            else:
-                batches = batches_by_item_id.get(item.id, [])
-                if not batches:
-                    self._append_inventory_row(data, [
-                        item.name,
-                        item.category or "",
-                        item.classification or "",
-                        item.item_type or "",
-                        item.unit_of_measure or "",
-                        "false",
-                        "",
-                        "",
-                        "0",
-                        "",
-                        ""
-                    ])
-                for batch in batches:
-                    self._append_inventory_row(data, [
-                        item.name,
-                        item.category or "",
-                        item.classification or "",
-                        item.item_type or "",
-                        item.unit_of_measure or "",
-                        "false",
-                        batch.description or "",
-                        "",
-                        format_quantity(batch.total_qty),
-                        "",
-                        batch.expiration_date.isoformat() if batch.expiration_date else ""
-                    ])
-      
-        return self._create_response(headers, data, format, "inventory_export_report")
+        sheets: list[tuple[str, list[str], list[list[Any]]]] = [
+            (catalog_title, headers, catalog_rows),
+        ]
+        if any(not item.is_trackable for item in items):
+            sheets.append(("Material Batches", batch_headers, material_batch_rows))
+        return self._create_multi_sheet_response(sheets, catalog_title)
 
     def export_borrow_history(
         self, 
@@ -716,6 +907,8 @@ class ExportService:
         include_deleted: bool = False,
         include_archived: bool = False,
     ) -> StreamingResponse:
+        from systems.admin.models.user import User
+
         normalized_from_date, normalized_to_date = self._resolve_time_window(
             timeline_mode=timeline_mode,
             anchor_date=anchor_date,
@@ -739,7 +932,25 @@ class ExportService:
                 include_archived=include_archived,
             )
 
-        from systems.admin.models.user import User
+        selected_borrower_label: str | None = None
+        if borrower_id:
+            selected_borrower = session.exec(
+                select(User).where(User.user_id == borrower_id)
+            ).first()
+            if selected_borrower is not None:
+                selected_borrower_label = (
+                    f"{selected_borrower.first_name} {selected_borrower.last_name} - "
+                    f"{selected_borrower.employee_id or selected_borrower.user_id}"
+                )
+            else:
+                selected_borrower_label = borrower_id
+
+        report_title = self._build_borrow_history_title(
+            borrower_label=selected_borrower_label,
+            timeline_mode=timeline_mode,
+            anchor_date=anchor_date,
+        )
+
         headers = [
             "Request ID",
             "Borrower Name + Employee ID",
@@ -907,8 +1118,8 @@ class ExportService:
                 received_return,
             ) in results
         ]
-        
-        return self._create_response(headers, data, format, "borrow_request_report")
+
+        return self._create_response(headers, data, format, report_title)
 
     def export_movements(
         self, 
@@ -946,6 +1157,27 @@ class ExportService:
                 include_deleted=include_deleted,
                 include_archived=include_archived,
             )
+
+        selected_item = None
+        selected_item_label = item_id or "Equipment"
+        if item_id:
+            selected_item = session.exec(
+                self._apply_visibility_filters(
+                    select(InventoryItem).where(InventoryItem.item_id == item_id),
+                    InventoryItem,
+                    include_deleted,
+                    include_archived,
+                )
+            ).first()
+            if selected_item and selected_item.name:
+                selected_item_label = selected_item.name
+
+        report_title = self._build_equipment_history_title(
+            item_label=selected_item_label,
+            serial_number=serial_number.strip() if serial_number else None,
+            timeline_mode=timeline_mode,
+            anchor_date=anchor_date,
+        )
 
         headers = [
             "Serial Number",
@@ -1122,8 +1354,8 @@ class ExportService:
                 received_return,
             ) in results
         ]
-        
-        return self._create_response(headers, data, format, "equipment_history_report")
+
+        return self._create_response(headers, data, format, report_title)
 
     def _export_audit_logs_v2(
         self,
@@ -1173,8 +1405,10 @@ class ExportService:
             for log in logs
         ]
 
+        report_title = "Audit Logs Report"
+
         if format == "csv":
-            return self._create_response(headers, rows, format, "audit_logs_report")
+            return self._create_response(headers, rows, format, report_title)
 
         summary_rows = self._build_filter_summary_rows(
             "Audit Logs",
@@ -1203,13 +1437,14 @@ class ExportService:
                 ("Summary", ["Metric", "Value"], summary_rows),
                 ("Audit Logs", headers, rows),
             ],
-            "audit_logs_report",
+            report_title,
         )
 
     def _export_inventory_v2(
         self,
         session: Session,
         format: str,
+        catalog_scope: CatalogExportScope,
         timeline_mode: TimelineMode | None,
         anchor_date: date | None,
         date_from: datetime | None,
@@ -1217,114 +1452,46 @@ class ExportService:
         include_deleted: bool,
         include_archived: bool,
     ) -> StreamingResponse:
-        item_statement = self._apply_visibility_filters(
-            select(InventoryItem),
-            InventoryItem,
-            include_deleted,
-            include_archived,
-        )
-        item_statement = self._apply_datetime_window(
-            item_statement,
-            InventoryItem.created_at,
-            date_from,
-            date_to,
-        )
-        items = self._execute_bounded_query(
-            session,
-            item_statement,
-            self._MAX_EXPORT_ITEMS,
-            "inventory items",
-        )
-        item_ids = [item.id for item in items]
-
-        units_by_item_id: dict[Any, list[InventoryUnit]] = defaultdict(list)
-        batches_by_item_id: dict[Any, list[InventoryBatch]] = defaultdict(list)
-        if item_ids:
-            units_statement = self._apply_visibility_filters(
-                select(InventoryUnit).where(InventoryUnit.inventory_uuid.in_(item_ids)),
-                InventoryUnit,
-                include_deleted,
-                include_archived,
-            )
-            for unit in self._execute_bounded_query(
-                session,
-                units_statement,
-                self._MAX_EXPORT_ROWS,
-                "inventory units",
-            ):
-                units_by_item_id[unit.inventory_uuid].append(unit)
-
-            batches_statement = self._apply_visibility_filters(
-                select(InventoryBatch).where(InventoryBatch.inventory_uuid.in_(item_ids)),
-                InventoryBatch,
-                include_deleted,
-                include_archived,
-            )
-            for batch in self._execute_bounded_query(
-                session,
-                batches_statement,
-                self._MAX_EXPORT_ROWS,
-                "inventory batches",
-            ):
-                batches_by_item_id[batch.inventory_uuid].append(batch)
-
         headers = [
             "name",
             "category",
             "classification",
             "item_type",
             "unit_of_measure",
-            "is_trackable",
             "description",
             "condition",
             "quantity",
             "serial_number",
             "expiration_date",
         ]
-        rows: list[list[Any]] = []
-        for item in items:
-            if item.is_trackable:
-                units = units_by_item_id.get(item.id, [])
-                if not units:
-                    self._append_inventory_row(rows, [item.name, item.category or "", item.classification or "", item.item_type or "", "", "true", "", "", "0", "", ""])
-                for unit in units:
-                    self._append_inventory_row(rows, [
-                        item.name,
-                        item.category or "",
-                        item.classification or "",
-                        item.item_type or "",
-                        "",
-                        "true",
-                        unit.description or "",
-                        unit.condition or "",
-                        "1",
-                        unit.serial_number or "",
-                        unit.expiration_date.isoformat() if unit.expiration_date else "",
-                    ])
-            else:
-                batches = batches_by_item_id.get(item.id, [])
-                if not batches:
-                    self._append_inventory_row(rows, [item.name, item.category or "", item.classification or "", item.item_type or "", item.unit_of_measure or "", "false", "", "", "0", "", ""])
-                for batch in batches:
-                    self._append_inventory_row(rows, [
-                        item.name,
-                        item.category or "",
-                        item.classification or "",
-                        item.item_type or "",
-                        item.unit_of_measure or "",
-                        "false",
-                        batch.description or "",
-                        "",
-                        format_quantity(batch.total_qty),
-                        "",
-                        batch.expiration_date.isoformat() if batch.expiration_date else "",
-                    ])
+        batch_headers = [
+            "item_id",
+            "name",
+            "batch_id",
+            "unit_of_measure",
+            "condition",
+            "status",
+            "total_quantity",
+            "available_quantity",
+            "expiration_date",
+            "received_at",
+            "description",
+        ]
+        items, rows, material_batch_rows, unit_row_count, batch_row_count = self._collect_inventory_export_data(
+            session=session,
+            catalog_scope=catalog_scope,
+            date_from=date_from,
+            date_to=date_to,
+            include_deleted=include_deleted,
+            include_archived=include_archived,
+        )
+        catalog_title = self._get_inventory_catalog_title(catalog_scope)
 
         if format == "csv":
-            return self._create_response(headers, rows, format, "inventory_export_report")
+            return self._create_response(headers, rows, format, catalog_title)
 
         summary_rows = self._build_filter_summary_rows(
-            "Inventory Catalog",
+            catalog_title,
             format,
             timeline_mode,
             anchor_date,
@@ -1333,11 +1500,12 @@ class ExportService:
             include_deleted,
             include_archived,
             {
+                "Catalog Scope": catalog_scope.value,
                 "Total Items": len(items),
                 "Trackable Items": sum(1 for item in items if item.is_trackable),
                 "Non-Trackable Items": sum(1 for item in items if not item.is_trackable),
-                "Unit Rows": sum(len(units) for units in units_by_item_id.values()),
-                "Batch Rows": sum(len(batches) for batches in batches_by_item_id.values()),
+                "Unit Rows": unit_row_count,
+                "Batch Rows": batch_row_count,
             },
         )
         for label, values in (
@@ -1351,13 +1519,14 @@ class ExportService:
             for value, count in sorted(counts.items()):
                 summary_rows.append([f"{label}: {value}", count])
 
-        return self._create_multi_sheet_response(
-            [
-                ("Summary", ["Metric", "Value"], summary_rows),
-                ("Catalog", headers, rows),
-            ],
-            "inventory_export_report",
-        )
+        sheets: list[tuple[str, list[str], list[list[Any]]]] = [
+            ("Summary", ["Metric", "Value"], summary_rows),
+            (catalog_title, headers, rows),
+        ]
+        if any(not item.is_trackable for item in items):
+            sheets.append(("Material Batches", batch_headers, material_batch_rows))
+
+        return self._create_multi_sheet_response(sheets, catalog_title)
 
     def _export_borrow_history_v2(
         self,
@@ -1380,6 +1549,19 @@ class ExportService:
         requested_item = aliased(InventoryItem)
         serial_unit = aliased(InventoryUnit)
         normalized_serial_number = serial_number.strip() if serial_number else None
+        selected_borrower_label: str | None = None
+
+        if borrower_id:
+            selected_borrower = session.exec(
+                select(User).where(User.user_id == borrower_id)
+            ).first()
+            if selected_borrower is not None:
+                selected_borrower_label = (
+                    f"{selected_borrower.first_name} {selected_borrower.last_name} - "
+                    f"{selected_borrower.employee_id or selected_borrower.user_id}"
+                )
+            else:
+                selected_borrower_label = borrower_id
 
         statement = select(BorrowRequest.id, BorrowRequest.request_date).outerjoin(
             borrower_user,
@@ -1652,26 +1834,32 @@ class ExportService:
                     else:
                         untrackable_rows.append(row)
 
+        report_title = self._build_borrow_history_title(
+            borrower_label=selected_borrower_label,
+            timeline_mode=timeline_mode,
+            anchor_date=anchor_date,
+        )
+
         if format == "csv":
-            return self._create_response(headers, detail_rows, format, "borrow_request_report")
+            return self._create_response(headers, detail_rows, format, report_title)
 
         if borrower_id:
-            safe_sheets: list[tuple[str, list[str], list[list[Any]]]] = []
+            safe_sheets: list[tuple[str, list[str], list[list[Any]], str]] = []
             if trackable_rows:
-                safe_sheets.append(("Trackable/Equipments", headers, trackable_rows))
+                safe_sheets.append(("Trackable/Equipments", headers, trackable_rows, report_title))
             if untrackable_rows:
-                safe_sheets.append(("Untrackable/Materials", headers, untrackable_rows))
+                safe_sheets.append(("Untrackable/Materials", headers, untrackable_rows, report_title))
             if not safe_sheets:
-                safe_sheets.append(("No Results", headers, []))
-            return self._create_multi_sheet_response(safe_sheets, "borrow_request_report")
+                safe_sheets.append(("No Results", headers, [], report_title))
+            return self._create_multi_sheet_response(safe_sheets, report_title)
 
-        safe_sheets: list[tuple[str, list[str], list[list[Any]]]] = []
+        safe_sheets: list[tuple[str, list[str], list[list[Any]], str]] = []
         for borrower_label, rows in sorted(borrower_rows_map.items()):
             safe_name = borrower_label[:31]
-            safe_sheets.append((safe_name, headers, rows))
+            safe_sheets.append((safe_name, headers, rows, report_title))
         if not safe_sheets:
-            safe_sheets.append(("No Results", headers, []))
-        return self._create_multi_sheet_response(safe_sheets, "borrow_request_report")
+            safe_sheets.append(("No Results", headers, [], report_title))
+        return self._create_multi_sheet_response(safe_sheets, report_title)
 
     def _export_movements_v2(
         self,
@@ -1694,6 +1882,17 @@ class ExportService:
 
         normalized_serial_number = serial_number.strip() if serial_number else None
         borrower_user = aliased(User)
+        selected_item = session.exec(
+            self._apply_visibility_filters(
+                select(InventoryItem).where(InventoryItem.item_id == item_id),
+                InventoryItem,
+                include_deleted,
+                include_archived,
+            )
+        ).first()
+        selected_item_label = (
+            selected_item.name if selected_item and selected_item.name else item_id
+        )
 
         statement = (
             select(BorrowRequestUnit, BorrowRequest, InventoryUnit, InventoryItem, borrower_user)
@@ -1759,19 +1958,26 @@ class ExportService:
             self._append_inventory_row(detail_rows, row)
             serial_rows_map[unit.serial_number].append(row)
 
-        if format == "csv":
-            return self._create_response(headers, detail_rows, format, "equipment_histry_report")
+        report_title = self._build_equipment_history_title(
+            item_label=selected_item_label,
+            serial_number=normalized_serial_number,
+            timeline_mode=timeline_mode,
+            anchor_date=anchor_date,
+        )
 
-        safe_sheets: list[tuple[str, list[str], list[list[Any]]]] = []
+        if format == "csv":
+            return self._create_response(headers, detail_rows, format, report_title)
+
+        safe_sheets: list[tuple[str, list[str], list[list[Any]], str]] = []
         for serial_number_value, rows in sorted(
             serial_rows_map.items(),
             key=lambda item: self._sanitize_sheet_title(item[0]),
         ):
             safe_name = serial_number_value[:31]
-            safe_sheets.append((safe_name, headers, rows))
+            safe_sheets.append((safe_name, headers, rows, report_title))
         if not safe_sheets:
-            safe_sheets.append(("No Results", headers, []))
-        return self._create_multi_sheet_response(safe_sheets, "equipment_histry_report")
+            safe_sheets.append(("No Results", headers, [], report_title))
+        return self._create_multi_sheet_response(safe_sheets, report_title)
 
     def export_entrusted(
         self,
@@ -1822,10 +2028,10 @@ class ExportService:
             for ass in assignments
         ]
 
-        return self._create_response(headers, data, format, "entrusted_items_report")
+        return self._create_response(headers, data, format, "Entrusted Items Report")
 
-    def _create_response(self, headers: List[str], data: List[List[Any]], format: str, report_name: str) -> StreamingResponse:
-        filename = self._make_export_filename(report_name)
+    def _create_response(self, headers: List[str], data: List[List[Any]], format: str, report_title: str) -> StreamingResponse:
+        filename = self._make_export_filename(report_title)
         sanitized_headers = [self._sanitize_export_cell(header) for header in headers]
         sanitized_data = self._sanitize_export_rows(data)
         
@@ -1845,18 +2051,8 @@ class ExportService:
         elif format == "xlsx":
             wb = Workbook()
             ws = wb.active
-            ws.title = report_name.replace("_", " ").title()
-            
-            # Write headers
-            for col, header in enumerate(sanitized_headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = Font(bold=True)
-                cell.alignment = Alignment(horizontal="center")
-            
-            # Write data
-            for row_idx, row_data in enumerate(sanitized_data, 2):
-                for col_idx, value in enumerate(row_data, 1):
-                    ws.cell(row=row_idx, column=col_idx, value=value)
+            ws.title = self._sanitize_sheet_title(report_title)
+            self._populate_sheet(ws, report_title, sanitized_headers, sanitized_data)
             
             output = io.BytesIO()
             wb.save(output)

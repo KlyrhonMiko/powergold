@@ -52,14 +52,21 @@ export const EXPORT_ENDPOINT_MAP: Record<ExportEndpointType, string> = {
   movements: '/inventory/data/export/ledger/movements',
 };
 
-export type ReportTimelineMode = 'daily' | 'rolling_7_day' | 'monthly' | 'yearly';
+export type ReportTimelineMode = 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type ReportTimelineSelection = ReportTimelineMode | '';
+export type CatalogExportScope = 'all' | 'trackable' | 'non_trackable';
 
 export const REPORT_TIMELINE_MODE_OPTIONS: Array<{ key: ReportTimelineMode; label: string }> = [
   { key: 'daily', label: 'Daily (Current Date)' },
-  { key: 'rolling_7_day', label: 'Rolling 7 Day' },
-  { key: 'monthly', label: 'Monthly' },
-  { key: 'yearly', label: 'Yearly' },
+  { key: 'weekly', label: 'Weekly (Start Date)' },
+  { key: 'monthly', label: 'Monthly (Pick Month)' },
+  { key: 'yearly', label: 'Yearly (Pick Year)' },
+];
+
+export const CATALOG_EXPORT_SCOPE_OPTIONS: Array<{ key: CatalogExportScope; label: string }> = [
+  { key: 'all', label: 'All Inventory Types' },
+  { key: 'trackable', label: 'Equipments (Trackable)' },
+  { key: 'non_trackable', label: 'Materials (Untrackable)' },
 ];
 
 export type ExportQueryValue = string | number | boolean | Date | null | undefined;
@@ -79,6 +86,7 @@ export interface ReportExportFilterContract {
 
 export interface ExportEndpointInput extends ReportExportFilterContract {
   format?: string;
+  catalog_scope?: CatalogExportScope;
   status?: string;
   movement_type?: string;
   item_id?: string;
@@ -98,8 +106,13 @@ export interface MovementExportFormValues extends ReportExportFilterContract {
   item_id: string;
 }
 
-export function isRolling7DayTimelineMode(timelineMode?: ReportTimelineSelection): boolean {
-  return timelineMode === 'rolling_7_day';
+export interface CatalogExportFormValues {
+  format: string;
+  catalog_scope: CatalogExportScope;
+}
+
+export function requiresTimelineAnchorDate(timelineMode?: ReportTimelineSelection): boolean {
+  return timelineMode === 'weekly' || timelineMode === 'monthly' || timelineMode === 'yearly';
 }
 
 function normalizeTimelineMode(value?: ReportTimelineSelection): ReportTimelineMode | undefined {
@@ -125,7 +138,7 @@ export function composeBorrowHistoryExportParams(params: BorrowHistoryExportForm
     format: params.format,
     status: normalizeSelectAll(params.status),
     ...(timelineMode ? { timeline_mode: timelineMode } : {}),
-    ...(isRolling7DayTimelineMode(timelineMode) ? { anchor_date: params.anchor_date } : {}),
+    ...(requiresTimelineAnchorDate(timelineMode) ? { anchor_date: params.anchor_date } : {}),
     borrower_id: normalizeOptionalText(params.borrower_id),
     include_deleted: params.include_deleted,
     include_archived: params.include_archived,
@@ -139,10 +152,17 @@ export function composeMovementExportParams(params: MovementExportFormValues): E
     format: params.format,
     item_id: params.item_id.trim(),
     ...(timelineMode ? { timeline_mode: timelineMode } : {}),
-    ...(isRolling7DayTimelineMode(timelineMode) ? { anchor_date: params.anchor_date } : {}),
+    ...(requiresTimelineAnchorDate(timelineMode) ? { anchor_date: params.anchor_date } : {}),
     serial_number: normalizeOptionalText(params.serial_number),
     include_deleted: params.include_deleted,
     include_archived: params.include_archived,
+  };
+}
+
+export function composeCatalogExportParams(params: CatalogExportFormValues): ExportEndpointInput {
+  return {
+    format: params.format,
+    catalog_scope: params.catalog_scope,
   };
 }
 
