@@ -63,7 +63,10 @@ def normalize_time_window(
     normalized_to = normalize_datetime_to_manila(date_to)
     mode_value = getattr(timeline_mode, "value", timeline_mode)
 
-    if mode_value and mode_value not in {"daily", "rolling_7_day", "monthly", "yearly"}:
+    if mode_value == "rolling_7_day":
+        mode_value = "weekly"
+
+    if mode_value and mode_value not in {"daily", "weekly", "monthly", "yearly"}:
         raise ValueError(f"Unsupported timeline_mode: {mode_value}")
 
     if (
@@ -89,11 +92,11 @@ def normalize_time_window(
             date_to=_end_of_day(base_day),
         )
 
-    if mode_value == "rolling_7_day":
-        start_day = base_day - timedelta(days=6)
+    if mode_value == "weekly":
+        start_day = base_day
         return NormalizedTimeWindow(
             date_from=_start_of_day(start_day),
-            date_to=_end_of_day(base_day),
+            date_to=_end_of_day(start_day + timedelta(days=6)),
         )
 
     if mode_value == "monthly":

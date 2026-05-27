@@ -119,8 +119,8 @@ def test_user_import_apply_creates_users_and_generates_credentials() -> None:
     assert len(preview.credentials_rows) == 2
     staff_credentials = next(row for row in preview.credentials_rows if row["employee_id"] == "EMP-2001")
     borrower_credentials = next(row for row in preview.credentials_rows if row["employee_id"] == "EMP-2002")
-    assert staff_credentials["generated_login_password_or_pin"].isdigit()
-    assert len(staff_credentials["generated_login_password_or_pin"]) == 6
+    assert len(staff_credentials["generated_login_password_or_pin"]) >= 12
+    assert any(char.isdigit() for char in staff_credentials["generated_login_password_or_pin"])
     assert borrower_credentials["generated_login_password_or_pin"].isdigit()
     assert len(borrower_credentials["generated_login_password_or_pin"]) == 6
 
@@ -173,5 +173,5 @@ def test_user_import_update_also_generates_credentials() -> None:
     assert "EMP-9001" in history_csv
     assert "updated" in history_csv
     generated_code = next(line for line in history_csv.splitlines() if "EMP-9001" in line).split(",")[6]
-    assert generated_code.isdigit()
-    assert len(generated_code) == 6
+    assert len(generated_code) >= 12
+    assert any(char.isdigit() for char in generated_code)

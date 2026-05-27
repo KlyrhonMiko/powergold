@@ -1,7 +1,5 @@
 import csv
 import io
-import secrets
-import string
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -161,8 +159,14 @@ class UserImportService:
         results = session.exec(statement.offset(skip).limit(limit)).all()
         return list(results), total
 
-    def get_history_item(self, session: Session, history_id: str) -> UserImportHistory | None:
-        return session.get(UserImportHistory, history_id)
+    def get_history_item(self, session: Session, history_id: str | UUID) -> UserImportHistory | None:
+        normalized_history_id = history_id
+        if isinstance(history_id, str):
+            try:
+                normalized_history_id = uuid.UUID(history_id)
+            except ValueError:
+                return None
+        return session.get(UserImportHistory, normalized_history_id)
 
     def _get_role_aliases(self, session: Session) -> dict[str, str]:
         mappings: dict[str, str] = {}
@@ -591,7 +595,12 @@ class UserImportService:
         return key == group_key
 
     async def create_preview(self, session: Session, file: UploadFile, actor_id: UUID | None, mode: str = "skip") -> PreviewSession:
-        content = await file.read()
+        file_handle = getattr(file, "file", None)
+        if file_handle is not None:
+            file_handle.seek(0)
+            content = file_handle.read()
+        else:
+            content = await file.read()
         parsed_csv = self.parse_csv_file(content, file.filename or "user_import.csv")
         row_previews = self._build_previews(session, parsed_csv)
         preview_id = str(uuid.uuid4())

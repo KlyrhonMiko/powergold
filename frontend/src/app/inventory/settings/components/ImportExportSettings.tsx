@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { FormSelect } from '@/components/ui/form-select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { format as formatDateFns } from 'date-fns';
 import {
   Download,
   History,
-  FileText,
   CheckCircle2,
   XCircle,
   RefreshCcw,
@@ -24,10 +24,12 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import {
+  CATALOG_EXPORT_SCOPE_OPTIONS,
   REPORT_TIMELINE_MODE_OPTIONS,
+  composeCatalogExportParams,
   composeBorrowHistoryExportParams,
   composeMovementExportParams,
-  isRolling7DayTimelineMode,
+  requiresTimelineAnchorDate,
   useImportHistory,
   useExportData,
   ImportHistoryItem,
@@ -39,6 +41,7 @@ import { logger } from '@/lib/logger';
 import { ImportPreviewCard } from './ImportPreviewCard';
 
 export function ImportExportSettings() {
+  const currentYear = new Date().getFullYear();
   const [page, setPage] = useState(1);
   const perPage = 5;
   const [isIntegrityModalOpen, setIsIntegrityModalOpen] = useState(false);
@@ -75,12 +78,13 @@ export function ImportExportSettings() {
 
   // Catalog Export State
   const [catalogParams, setCatalogParams] = useState({
-    format: 'xlsx'
+    format: 'xlsx',
+    catalog_scope: 'all' as 'all' | 'trackable' | 'non_trackable',
   });
 
   // Ledger Export State
   const [borrowParams, setBorrowParams] = useState({
-    timeline_mode: '' as '' | 'daily' | 'rolling_7_day' | 'monthly' | 'yearly',
+    timeline_mode: '' as '' | 'daily' | 'weekly' | 'monthly' | 'yearly',
     anchor_date: undefined as Date | undefined,
     status: 'all',
     format: 'xlsx',
@@ -90,7 +94,7 @@ export function ImportExportSettings() {
   });
 
   const [movementParams, setMovementParams] = useState({
-    timeline_mode: '' as '' | 'daily' | 'rolling_7_day' | 'monthly' | 'yearly',
+    timeline_mode: '' as '' | 'daily' | 'weekly' | 'monthly' | 'yearly',
     anchor_date: undefined as Date | undefined,
     item_id: '',
     serial_number: '',
@@ -105,8 +109,8 @@ export function ImportExportSettings() {
 
   const importHistory = historyResponse?.data || [];
   const meta = historyResponse?.meta;
-  const borrowHistoryNeedsAnchorDate = isRolling7DayTimelineMode(borrowParams.timeline_mode);
-  const equipmentHistoryNeedsAnchorDate = isRolling7DayTimelineMode(movementParams.timeline_mode);
+  const borrowHistoryNeedsAnchorDate = requiresTimelineAnchorDate(borrowParams.timeline_mode);
+  const equipmentHistoryNeedsAnchorDate = requiresTimelineAnchorDate(movementParams.timeline_mode);
   const serialOptions = selectedMovementItemId
     ? [
       { label: 'All Serials', key: '' },
@@ -116,6 +120,31 @@ export function ImportExportSettings() {
       })),
     ]
     : [];
+
+  const handleTimelineModeChange = (
+    nextMode: '' | 'daily' | 'weekly' | 'monthly' | 'yearly',
+    currentAnchorDate: Date | undefined,
+  ) => (nextMode === 'daily' ? undefined : currentAnchorDate);
+
+  const monthInputValue = (value?: Date) =>
+    value ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}` : '';
+
+  const yearInputValue = (value?: Date) => (value ? String(value.getFullYear()) : '');
+
+  const parseMonthInputValue = (value: string): Date | undefined => {
+    if (!value) return undefined;
+    const [year, month] = value.split('-').map(Number);
+    if (!year || !month) return undefined;
+    return new Date(year, month - 1, 1);
+  };
+
+  const parseYearInputValue = (value: string): Date | undefined => {
+    const year = Number(value);
+    if (!year) return undefined;
+    return new Date(year, 0, 1);
+  };
+
+  const yearOptions = Array.from({ length: 11 }, (_, index) => String(currentYear - 5 + index));
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
@@ -238,21 +267,61 @@ export function ImportExportSettings() {
                 <FormSelect
                   label="Timeline Mode"
                   value={borrowParams.timeline_mode}
-                  onChange={(v) => setBorrowParams({ ...borrowParams, timeline_mode: v as typeof borrowParams.timeline_mode, anchor_date: v === 'rolling_7_day' ? borrowParams.anchor_date : undefined })}
+                  onChange={(v) => {
+                    const nextMode = v as typeof borrowParams.timeline_mode;
+                    setBorrowParams({
+                      ...borrowParams,
+                      timeline_mode: nextMode,
+                      anchor_date: handleTimelineModeChange(nextMode, borrowParams.anchor_date),
+                    });
+                  }}
                   options={REPORT_TIMELINE_MODE_OPTIONS}
                   placeholder="Select timeline"
                 />
-                {borrowHistoryNeedsAnchorDate && (
+                {borrowParams.timeline_mode === 'weekly' && (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground px-1">Anchor Date</label>
+                    <label className="text-sm font-semibold text-foreground px-1">Week Start Date</label>
                     <DatePicker
                       date={borrowParams.anchor_date}
                       onChange={(date) => setBorrowParams({ ...borrowParams, anchor_date: date })}
-                      placeholder="Required for rolling 7 day"
+                      placeholder="Required week start date"
                     />
                   </div>
                 )}
-                <FormSelect
+                {borrowParams.timeline_mode === 'monthly' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground px-1" htmlFor="borrow-month">Month</label>
+                    <input
+                      id="borrow-month"
+                      type="month"
+                      value={monthInputValue(borrowParams.anchor_date)}
+                      onChange={(event) => setBorrowParams({ ...borrowParams, anchor_date: parseMonthInputValue(event.target.value) })}
+                      className="w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+                    />
+                  </div>
+                )}
+                {borrowParams.timeline_mode === 'yearly' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground px-1" htmlFor="borrow-year">Year</label>
+                    <input
+                      id="borrow-year"
+                      type="number"
+                      list="borrow-year-options"
+                      min={currentYear - 20}
+                      max={currentYear + 20}
+                      value={yearInputValue(borrowParams.anchor_date)}
+                      onChange={(event) => setBorrowParams({ ...borrowParams, anchor_date: parseYearInputValue(event.target.value) })}
+                      placeholder="Select year"
+                      className="w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+                    />
+                    <datalist id="borrow-year-options">
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year} />
+                      ))}
+                    </datalist>
+                  </div>
+                )}
+                <SearchableSelect
                   label="Specific Borrower (Optional)"
                   value={borrowParams.borrower_id}
                   onChange={(v) => setBorrowParams({ ...borrowParams, borrower_id: v })}
@@ -327,22 +396,62 @@ export function ImportExportSettings() {
                 <FormSelect
                   label="Timeline Mode"
                   value={movementParams.timeline_mode}
-                  onChange={(v) => setMovementParams({ ...movementParams, timeline_mode: v as typeof movementParams.timeline_mode, anchor_date: v === 'rolling_7_day' ? movementParams.anchor_date : undefined })}
+                  onChange={(v) => {
+                    const nextMode = v as typeof movementParams.timeline_mode;
+                    setMovementParams({
+                      ...movementParams,
+                      timeline_mode: nextMode,
+                      anchor_date: handleTimelineModeChange(nextMode, movementParams.anchor_date),
+                    });
+                  }}
                   options={REPORT_TIMELINE_MODE_OPTIONS}
                   placeholder="Select timeline"
                 />
-                {equipmentHistoryNeedsAnchorDate && (
+                {movementParams.timeline_mode === 'weekly' && (
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-foreground px-1">Anchor Date</label>
+                    <label className="text-sm font-semibold text-foreground px-1">Week Start Date</label>
                     <DatePicker
                       date={movementParams.anchor_date}
                       onChange={(date) => setMovementParams({ ...movementParams, anchor_date: date })}
-                      placeholder="Required for rolling 7 day"
+                      placeholder="Required week start date"
                     />
                   </div>
                 )}
+                {movementParams.timeline_mode === 'monthly' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground px-1" htmlFor="movement-month">Month</label>
+                    <input
+                      id="movement-month"
+                      type="month"
+                      value={monthInputValue(movementParams.anchor_date)}
+                      onChange={(event) => setMovementParams({ ...movementParams, anchor_date: parseMonthInputValue(event.target.value) })}
+                      className="w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+                    />
+                  </div>
+                )}
+                {movementParams.timeline_mode === 'yearly' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-foreground px-1" htmlFor="movement-year">Year</label>
+                    <input
+                      id="movement-year"
+                      type="number"
+                      list="movement-year-options"
+                      min={currentYear - 20}
+                      max={currentYear + 20}
+                      value={yearInputValue(movementParams.anchor_date)}
+                      onChange={(event) => setMovementParams({ ...movementParams, anchor_date: parseYearInputValue(event.target.value) })}
+                      placeholder="Select year"
+                      className="w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+                    />
+                    <datalist id="movement-year-options">
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year} />
+                      ))}
+                    </datalist>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
-                  <FormSelect
+                  <SearchableSelect
                     label="Specific Equipment"
                     required
                     value={movementParams.item_id}
@@ -351,14 +460,14 @@ export function ImportExportSettings() {
                       label: `${item.name} (${item.item_id})`,
                       key: item.item_id,
                     }))}
-                    placeholder="Select equipment..."
+                    placeholder="Search equipment..."
                   />
-                  <FormSelect
+                  <SearchableSelect
                     label="Serial Number"
                     value={movementParams.serial_number}
                     onChange={(v) => setMovementParams({ ...movementParams, serial_number: v })}
                     options={serialOptions}
-                    placeholder={selectedMovementItemId ? 'Select serial number' : 'Select an item first'}
+                    placeholder={selectedMovementItemId ? 'Search serial number' : 'Select an item first'}
                     disabled={!selectedMovementItemId}
                   />
                 </div>
@@ -416,8 +525,15 @@ export function ImportExportSettings() {
               </div>
               <div className="flex flex-col flex-1 gap-4">
                 <p className="text-xs text-muted-foreground leading-relaxed px-1">
-                  Export all catalog items, individual tracked units (with serials), and consumable batches in a single report.
+                  Export the full catalog or limit the report to either equipments/trackable items or materials/untrackable items.
                 </p>
+                <FormSelect
+                  label="Catalog Scope"
+                  value={catalogParams.catalog_scope}
+                  onChange={(v) => setCatalogParams({ ...catalogParams, catalog_scope: v as typeof catalogParams.catalog_scope })}
+                  options={CATALOG_EXPORT_SCOPE_OPTIONS}
+                  placeholder="Select scope"
+                />
                 <FormSelect
                   label="Format"
                   value={catalogParams.format}
@@ -429,10 +545,10 @@ export function ImportExportSettings() {
                   placeholder="Select format"
                 />
                 <button
-                  onClick={() => exportData('catalog', catalogParams)}
+                  onClick={() => exportData('catalog', composeCatalogExportParams(catalogParams))}
                   className="w-full h-11 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 flex items-center justify-center gap-2 mt-auto"
                 >
-                  <Download className="w-4 h-4" /> Export Complete State
+                  <Download className="w-4 h-4" /> Export Inventory Catalog
                 </button>
               </div>
             </div>

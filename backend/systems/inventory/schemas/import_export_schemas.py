@@ -9,9 +9,15 @@ from utils.time_utils import format_datetime
 
 class TimelineMode(str, Enum):
     DAILY = "daily"
-    ROLLING_7_DAY = "rolling_7_day"
+    WEEKLY = "weekly"
     MONTHLY = "monthly"
     YEARLY = "yearly"
+
+
+class CatalogExportScope(str, Enum):
+    ALL = "all"
+    TRACKABLE = "trackable"
+    NON_TRACKABLE = "non_trackable"
 
 
 class ExportReportFilterBase(BaseModel):
@@ -35,10 +41,17 @@ class ExportReportFilterBase(BaseModel):
     include_deleted: bool = False
     include_archived: bool = False
 
+    @field_validator("timeline_mode", mode="before")
+    @classmethod
+    def normalize_timeline_mode(cls, value: Any) -> Any:
+        if value == "rolling_7_day":
+            return TimelineMode.WEEKLY
+        return value
+
     @model_validator(mode="after")
     def validate_timeline_filters(self) -> "ExportReportFilterBase":
-        if self.timeline_mode == TimelineMode.ROLLING_7_DAY and self.anchor_date is None:
-            raise ValueError("anchor_date is required when timeline_mode is rolling_7_day")
+        if self.timeline_mode == TimelineMode.WEEKLY and self.anchor_date is None:
+            raise ValueError("anchor_date is required when timeline_mode is weekly")
 
         if self.date_from and self.date_to and self.date_from > self.date_to:
             raise ValueError("date_from must be less than or equal to date_to")
@@ -51,7 +64,7 @@ class AuditLogExportFilters(ExportReportFilterBase):
 
 
 class CatalogExportFilters(ExportReportFilterBase):
-    pass
+    catalog_scope: CatalogExportScope = CatalogExportScope.ALL
 
 
 class EntrustedExportFilters(ExportReportFilterBase):

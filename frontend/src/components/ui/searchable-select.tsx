@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,15 @@ export function SearchableSelect({
 }: SearchableSelectProps) {
     const [open, setOpen] = useState(false);
     const [search, setSearch] = useState('');
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+    const handleSearchInputRef = useCallback((node: HTMLInputElement | null) => {
+        searchInputRef.current = node;
+
+        if (node && open) {
+            node.focus({ preventScroll: true });
+        }
+    }, [open]);
 
     const filteredOptions = useMemo(() => {
         if (!search) return options;
@@ -54,6 +63,7 @@ export function SearchableSelect({
             )}
             <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger
+                    type="button"
                     disabled={disabled}
                     className={cn(
                         "flex h-12 w-full items-center justify-between rounded-xl border border-border bg-muted/20 px-4 py-2 text-sm ring-offset-background transition-all hover:bg-muted/30 focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50",
@@ -67,20 +77,22 @@ export function SearchableSelect({
                 </PopoverTrigger>
                 <PopoverContent
                     align="start"
+                    initialFocus={false}
                     sideOffset={6}
                     className="w-[var(--base-ui-popover-trigger-width)] p-0 bg-popover border border-border rounded-xl shadow-xl overflow-hidden animate-in zoom-in-95 duration-200"
                 >
                     <div className="flex items-center border-b border-border p-3 gap-2 bg-muted/20">
                         <Search className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                         <input
+                            ref={handleSearchInputRef}
                             className="flex h-6 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/40"
                             placeholder="Type to search..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            autoFocus
                         />
                         {search && (
                             <button
+                                type="button"
                                 onClick={(e) => { e.stopPropagation(); setSearch(''); }}
                                 className="p-1 hover:bg-muted rounded-full transition-colors"
                             >

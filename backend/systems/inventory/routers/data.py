@@ -518,6 +518,7 @@ async def export_catalog(
             session,
             format=filters.format,
             report_version=filters.report_version,
+            catalog_scope=filters.catalog_scope,
             timeline_mode=filters.timeline_mode,
             anchor_date=filters.anchor_date,
             date_from=effective_date_from,
