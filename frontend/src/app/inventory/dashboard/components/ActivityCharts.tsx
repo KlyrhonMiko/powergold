@@ -15,8 +15,46 @@ export function InventoryHealthPanel({ health, loading }: { health: InventoryHea
     { id: 'batch_conditions', label: 'Batch Condition' },
   ];
 
-  const currentData = health ? health[activeTab] : [];
+  const statusOrder: Record<string, number> = {
+    healthy: 0,
+    low_stock: 1,
+    out_of_stock: 2,
+  };
+
+  const currentData = health
+    ? [...health[activeTab]].sort((left, right) => {
+        const leftRank = statusOrder[left.label.toLowerCase()] ?? 99;
+        const rightRank = statusOrder[right.label.toLowerCase()] ?? 99;
+        return leftRank - rightRank;
+      })
+    : [];
   const totalCount = currentData.reduce((acc, curr) => acc + curr.count, 0);
+
+  const getHealthBarColor = (label: string) => {
+    const normalized = label.toLowerCase();
+
+    if (['available', 'healthy', 'good', 'excellent'].includes(normalized)) {
+      return 'bg-emerald-500';
+    }
+
+    if (normalized === 'low_stock') {
+      return 'bg-yellow-500';
+    }
+
+    if (normalized === 'out_of_stock') {
+      return 'bg-rose-500';
+    }
+
+    if (normalized === 'borrowed') {
+      return 'bg-primary';
+    }
+
+    if (['maintenance', 'fair', 'near_expiry'].includes(normalized)) {
+      return 'bg-amber-500';
+    }
+
+    return 'bg-rose-500';
+  };
 
   return (
     <div className="flex flex-col h-full bg-card border border-border rounded-xl overflow-hidden">
@@ -53,11 +91,7 @@ export function InventoryHealthPanel({ health, loading }: { health: InventoryHea
                 </div>
                 <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-500 ${item.label === 'available' || item.label === 'healthy' || item.label === 'good' || item.label === 'excellent' ? 'bg-emerald-500' :
-                      item.label === 'borrowed' ? 'bg-primary' :
-                        item.label === 'maintenance' || item.label === 'fair' || item.label === 'low_stock' || item.label === 'near_expiry' ? 'bg-amber-500' :
-                          'bg-rose-500'
-                      }`}
+                    className={`h-full transition-all duration-500 ${getHealthBarColor(item.label)}`}
                     style={{ width: `${Math.min(100, (item.count / Math.max(1, totalCount)) * 100)}%` }}
                   />
                 </div>

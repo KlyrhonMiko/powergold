@@ -53,6 +53,7 @@ const navigation: Record<string, { section: string; items: { name: string; href:
       items: [
         { name: 'Equipment', href: '/inventory/items', icon: Package },
         { name: 'Requests', href: '/inventory/requests', icon: ClipboardList },
+        { name: 'Request Consumables', href: '/inventory/requests/new', icon: ClipboardList },
       ]
     },
     {
@@ -198,7 +199,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               </h3>
               <div className="space-y-0.5">
                 {section.items.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const isConsumablesRequestRoute = pathname === '/inventory/requests/new';
+                  const isActive = pathname === item.href || (
+                    pathname.startsWith(`${item.href}/`) &&
+                    !(item.href === '/inventory/requests' && isConsumablesRequestRoute)
+                  );
                   return (
                     <Link
                       key={item.name}

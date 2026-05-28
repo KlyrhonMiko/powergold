@@ -60,7 +60,7 @@ def _to_inventory_item_reads(session: Session, items: list) -> list[InventoryIte
         item_read.total_qty = item.total_qty
         item_read.available_qty = item.available_qty
         item_read.condition = condition_map.get(item.id, "good")
-        item_read.status_condition = (item.status or "healthy").upper()
+        item_read.status_condition = inventory_service.get_item_status(session, item)
         reads.append(item_read)
     return reads
 

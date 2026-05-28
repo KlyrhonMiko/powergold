@@ -54,8 +54,6 @@ export default function UsersPage() {
         </div>
       )}
 
-      <UserImportSection />
-
       <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
         <UsersToolbar
           search={search}
@@ -86,6 +84,8 @@ export default function UsersPage() {
           />
         )}
       </div>
+
+      <UserImportSection />
 
       {isConfirmingAction && (
         <ConfirmActionModal
