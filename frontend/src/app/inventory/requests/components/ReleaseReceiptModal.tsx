@@ -43,6 +43,7 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
   const today = fmtShort(new Date().toISOString());
   const hasReturnSummary = receipt.items.some((item) => (item.qty_returned ?? 0) > 0 || (item.qty_not_returned ?? item.qty_released) > 0 || (item.batch_details?.length ?? 0) > 0);
   const showDueDate = receipt.items.length > 0 && receipt.items.every((item) => item.is_trackable !== false);
+  const hideBorrowerInfo = receipt.items.length > 0 && receipt.items.every((item) => item.is_trackable === false);
 
   const s = {
     wrap: 'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #000; width: 80mm; margin: 0; font-size: 11px; line-height: 1.4;',
@@ -116,8 +117,8 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
     <hr style="${s.hr}">
 
     <!-- Borrower -->
-    ${row('Borrower', receipt.borrower_name || '—')}
-    ${receipt.borrower_user_id ? row('ID', receipt.borrower_user_id) : ''}
+    ${hideBorrowerInfo ? '' : row('Borrower', receipt.borrower_name || '—')}
+    ${hideBorrowerInfo ? '' : (receipt.borrower_user_id ? row('ID', receipt.borrower_user_id) : '')}
     ${receipt.customer_name ? row('Client', receipt.customer_name) : ''}
     ${receipt.location_name ? row('Location', receipt.location_name) : ''}
 
@@ -170,7 +171,7 @@ function buildReceiptHtml(receipt: ReleaseReceipt, signatureDataUrl: string | nu
            </div>`
       : `<div style="border-bottom: 1px solid #000; height: 50px;"></div>`
     }
-      <div style="font-size: 9px; color: #555; margin-top: 2px;">${receipt.borrower_name || ''}</div>
+      <div style="font-size: 9px; color: #555; margin-top: 2px;">${hideBorrowerInfo ? '' : (receipt.borrower_name || '')}</div>
     </div>
 
     <hr style="${s.hr}">

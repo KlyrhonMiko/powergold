@@ -25,6 +25,14 @@ const actions = [
     bg: 'bg-yellow-100/50 dark:bg-yellow-500/10',
   },
   {
+    label: 'Request Consumables',
+    description: 'Submit stock request',
+    href: '/inventory/requests/new',
+    icon: ClipboardList,
+    accent: 'text-yellow-600 dark:text-yellow-400',
+    bg: 'bg-yellow-100/50 dark:bg-yellow-500/10',
+  },
+  {
     label: 'Audit Logs',
     description: 'Activity trail',
     href: '/inventory/audit_logs',

@@ -424,7 +424,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         # 3. Check Low Stock (Percentage of Batch Total)
         if batch.total_qty > 0:
             pct_available = (batch.available_qty / batch.total_qty) * 100
-            low_stock_threshold = int(thresholds.get("low_stock_threshold", "20"))
+            low_stock_threshold = max(int(thresholds.get("low_stock_threshold", "25")), 25)
             if pct_available <= low_stock_threshold:
                 return "low_stock"
             
@@ -941,7 +941,7 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         configs = config_service.get_by_category(session, "inventory_threshold_alerts")
         thresholds = {c.key: c.value for c in configs}
         
-        low_stock_pct = int(thresholds.get("low_stock_threshold", "20"))
+        low_stock_pct = max(int(thresholds.get("low_stock_threshold", "25")), 25)
         overstock_pct = int(thresholds.get("overstock_threshold", "150"))
 
         balances = self.get_item_balances(session, item)

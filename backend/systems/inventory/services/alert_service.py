@@ -34,7 +34,7 @@ class AlertService:
         configs = self.config_service.get_by_category(session, "inventory_threshold_alerts")
         thresholds = {c.key: c.value for c in configs}
         
-        low_stock_pct = int(thresholds.get("low_stock_threshold", "20"))
+        low_stock_pct = max(int(thresholds.get("low_stock_threshold", "25")), 25)
         overstock_pct = int(thresholds.get("overstock_threshold", "150"))
         
         # Parse Lists (Stored as JSON strings in DB)

@@ -42,6 +42,10 @@ interface SelectionViewProps {
   onRemoveFromCart: (id: string) => void;
   onClear: () => void;
   onProceed: () => void;
+  pageTitle?: string;
+  pageDescription?: string;
+  backLabel?: string;
+  backTitle?: string;
 }
 
 export function SelectionView({
@@ -67,10 +71,15 @@ export function SelectionView({
   onRemoveFromCart,
   onClear,
   onProceed,
+  pageTitle = 'Select Items',
+  pageDescription,
+  backLabel = 'Back',
+  backTitle = 'Back to sign in',
 }: SelectionViewProps) {
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
 
   const selectedKindLabel = selectedItemKind === 'trackable' ? 'Equipments' : 'Materials';
+  const description = pageDescription ?? `Browse and add ${selectedKindLabel.toLowerCase()} to your request`;
 
   return (
     <>
@@ -81,9 +90,9 @@ export function SelectionView({
           <div className="p-4 lg:p-6 border-b bg-card">
             <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 justify-between items-start sm:items-center">
               <div>
-                <h1 className="text-xl lg:text-2xl font-semibold tracking-tight">Select Items</h1>
+                <h1 className="text-xl lg:text-2xl font-semibold tracking-tight">{pageTitle}</h1>
                 <p className="text-xs lg:text-sm text-muted-foreground mt-0.5 lg:mt-1">
-                  Browse and add {selectedKindLabel.toLowerCase()} to your request
+                  {description}
                   <span className="ml-1.5 text-[11px] font-medium text-muted-foreground/70">
                     ({totalItems} total)
                   </span>
@@ -97,10 +106,10 @@ export function SelectionView({
                 <button
                   onClick={onBack}
                   className="inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  title="Back to sign in"
+                  title={backTitle}
                 >
                   <Undo2 className="h-3.5 w-3.5" />
-                  Back
+                  {backLabel}
                 </button>
               </div>
 
