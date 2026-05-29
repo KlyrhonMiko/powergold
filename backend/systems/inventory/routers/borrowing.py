@@ -24,6 +24,7 @@ from systems.inventory.schemas.borrow_request_schemas import (
     BorrowRequestReopen,
     BorrowRequestRelease,
     BorrowRequestReturn,
+    BorrowRequestVoid,
     BorrowRequestEventRead,
     BorrowRequestEventGlobalRead,
     ReleaseReceiptRead,
@@ -234,6 +235,42 @@ async def reject_request(
         return create_success_response(
             data=borrow_service.serialize_borrow_request(session, updated_req),
             message="Request rejected",
+            request=request,
+        )
+    except ValueError as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post(
+    "/requests/{request_id}/void",
+    response_model=GenericResponse[BorrowRequestRead],
+    responses={
+        404: {"model": GenericResponse},
+        400: {"model": GenericResponse},
+        401: {"model": GenericResponse},
+    },
+)
+async def void_request(
+    request_id: str,
+    payload: BorrowRequestVoid,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: None = Depends(require_permission("inventory:borrow_requests:manage")),
+):
+    try:
+        updated_req = borrow_service.void_request(
+            session,
+            request_id,
+            current_user.id,
+            note=payload.notes,
+        )
+        session.commit()
+
+        return create_success_response(
+            data=borrow_service.serialize_borrow_request(session, updated_req),
+            message="Request voided",
             request=request,
         )
     except ValueError as e:

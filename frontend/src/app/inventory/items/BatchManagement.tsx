@@ -5,10 +5,11 @@ import { inventoryApi, InventoryBatch, StockAdjustmentPayload } from './api';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
 import { useInventoryBatches } from './lib/useItemQueries';
 import { format as formatDateFns } from 'date-fns';
-import { X, Plus, Edit2, Loader2, Layers, History as HistoryIcon, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, Plus, Edit2, Loader2, Layers, History as HistoryIcon, TrendingUp, TrendingDown, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 import { DatePicker } from '@/components/ui/date-picker';
 import { FormSelect } from '@/components/ui/form-select';
+import { ActionConfirmModal } from '@/components/ui/ActionConfirmModal';
 import { parseSystemDate } from '@/lib/utils';
 import { formatQuantity, parseQuantityInput } from '@/lib/inventoryQuantity';
 
@@ -24,6 +25,8 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
   const [editingBatch, setEditingBatch] = useState<InventoryBatch | null>(null);
   const [isAdjusting, setIsAdjusting] = useState<InventoryBatch | null>(null);
   const [isReduction, setIsReduction] = useState(false);
+  const [closingBatch, setClosingBatch] = useState<InventoryBatch | null>(null);
+  const [isClosingBatch, setIsClosingBatch] = useState(false);
 
   const [formData, setFormData] = useState({
     expiration_date: undefined as Date | undefined,
@@ -156,6 +159,23 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
   const openAdjust = (batch: InventoryBatch) => {
     resetForms();
     setIsAdjusting(batch);
+  };
+
+  const handleCloseBatch = async () => {
+    if (!closingBatch) return;
+
+    setIsClosingBatch(true);
+    try {
+      await inventoryApi.closeBatch(itemId, closingBatch.batch_id);
+      toast.success('Batch closed');
+      setClosingBatch(null);
+      invalidateBatches();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to close batch';
+      toast.error(message);
+    } finally {
+      setIsClosingBatch(false);
+    }
   };
 
   return (
@@ -343,6 +363,15 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
                         <button onClick={() => openEdit(batch)} aria-label={`Edit metadata for batch ${batch.batch_id}`} title="Edit Metadata" className="p-1.5 hover:bg-secondary text-muted-foreground rounded-lg">
                           <Edit2 className="w-4 h-4" />
                         </button>
+                        <button
+                          onClick={() => setClosingBatch(batch)}
+                          aria-label={`Close batch ${batch.batch_id}`}
+                          title={batch.available_qty === 0 ? 'Close Batch' : 'Only empty batches can be closed'}
+                          className="p-1.5 hover:bg-secondary text-muted-foreground rounded-lg disabled:cursor-not-allowed disabled:opacity-40"
+                          disabled={batch.available_qty !== 0}
+                        >
+                          <Archive className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -352,6 +381,33 @@ export function BatchManagement({ itemId, onClose }: BatchManagementProps) {
           </div>
         </div>
       </div>
+
+      <ActionConfirmModal
+        open={closingBatch !== null}
+        title="Close this batch?"
+        description="This will hide the batch from inventory screens while keeping it in the database for history and audit purposes."
+        icon={<Archive className="h-5 w-5" />}
+        confirmLabel="Close Batch"
+        tone="neutral"
+        confirming={isClosingBatch}
+        onCancel={() => {
+          if (!isClosingBatch) setClosingBatch(null);
+        }}
+        onConfirm={() => void handleCloseBatch()}
+        details={closingBatch ? (
+          <div className="space-y-1">
+            <p>
+              Batch <span className="font-mono text-foreground">{closingBatch.batch_id}</span>
+            </p>
+            <p>
+              Available quantity: <span className="font-semibold text-foreground">{formatQuantity(closingBatch.available_qty)}</span>
+            </p>
+            <p>
+              Total quantity: <span className="font-semibold text-foreground">{formatQuantity(closingBatch.total_qty)}</span>
+            </p>
+          </div>
+        ) : null}
+      />
     </div>
   );
 }

@@ -29,6 +29,7 @@ export interface BorrowRecord {
 export type BorrowAction =
   | 'approve'
   | 'reject'
+  | 'void'
   | 'release'
   | 'return'
   | 'reopen'
@@ -41,6 +42,7 @@ export const STATUS_TABS = [
   'released',
   'returned',
   'rejected',
+  'voided',
 ] as const;
 
 export type StatusTab = (typeof STATUS_TABS)[number];

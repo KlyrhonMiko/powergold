@@ -25,6 +25,7 @@ function StatusBadge({ status, closeReason }: { status: string; closeReason?: st
     released: { bg: 'bg-primary/5 border-primary/10', text: 'text-primary/80', icon: <PackageOpen className="w-3 h-3" /> },
     returned: { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', icon: <CheckCircle2 className="w-3 h-3" /> },
     rejected: { bg: 'bg-rose-50 border-rose-200', text: 'text-rose-700', icon: <XCircle className="w-3 h-3" /> },
+    voided: { bg: 'bg-amber-50 border-amber-200', text: 'text-amber-700', icon: <XCircle className="w-3 h-3" /> },
     closed: { bg: 'bg-slate-50 border-slate-200', text: 'text-slate-600', icon: <Archive className="w-3 h-3" /> },
   };
 
@@ -112,7 +113,7 @@ function renderDueDate(dateStr?: string, status?: string) {
       return <span className="text-xs text-muted-foreground">{dateStr}</span>;
     }
 
-    const isResolved = status === 'returned' || status === 'closed' || status === 'rejected';
+    const isResolved = status === 'returned' || status === 'closed' || status === 'rejected' || status === 'voided';
     const isOverdue = !isResolved && dueDate.getTime() < Date.now();
 
     return (
@@ -386,6 +387,7 @@ export function RequestsTable({
     if (record.status === 'approved') {
       actions.push(
         <ActionButton key="assign" label={isFullyAssigned(record) ? 'Reassign' : 'Assign'} onClick={() => onSetAssigningRequest(record)} />,
+        <ActionButton key="void" label="Void" variant="danger" onClick={() => onSetConfirmingAction({ action: 'void', requestId: record.request_id, actionLabel: 'Void' })} />,
       );
       if (isFullyAssigned(record)) {
         actions.push(
@@ -431,6 +433,14 @@ export function RequestsTable({
           <span className="text-[11px] text-muted-foreground ml-1.5">
             {record.closed_at ? `Closed ${formatDate(record.closed_at).split(',')[0]}` : 'Finalized'}
           </span>
+        </div>
+      );
+    }
+
+    if (record.status === 'voided') {
+      return (
+        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+          <span className="text-[11px] text-muted-foreground">Cancelled after approval</span>
         </div>
       );
     }

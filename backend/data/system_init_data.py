@@ -148,6 +148,7 @@ SYSTEM_CONFIGS = [
     {"system": "borrower", "key": "returned", "value": "4", "category": "borrow_requests_status", "description": "Items have been returned (terminal)"},
     {"system": "borrower", "key": "rejected", "value": "5", "category": "borrow_requests_status", "description": "Request rejected by approver (terminal)"},
     {"system": "borrower", "key": "closed", "value": "6", "category": "borrow_requests_status", "description": "Request administratively closed (terminal)"},
+    {"system": "borrower", "key": "voided", "value": "7", "category": "borrow_requests_status", "description": "Request voided/cancelled after approval (terminal)"},
 
     {"system": "borrower", "key": "standard", "value": "Standard", "category": "borrow_requests_approval_channel", "description": "Standard approval workflow"},
     {"system": "borrower", "key": "emergency_bypass", "value": "Emergency Bypass", "category": "borrow_requests_approval_channel", "description": "Emergency bypass approval"},
@@ -158,6 +159,7 @@ SYSTEM_CONFIGS = [
     {"system": "borrower", "key": "created", "value": "Created", "category": "borrow_request_events_event_type", "description": "Request created"},
     {"system": "borrower", "key": "approved", "value": "Approved", "category": "borrow_request_events_event_type", "description": "Request approved"},
     {"system": "borrower", "key": "rejected", "value": "Rejected", "category": "borrow_request_events_event_type", "description": "Request rejected"},
+    {"system": "borrower", "key": "voided", "value": "Voided", "category": "borrow_request_events_event_type", "description": "Request voided/cancelled"},
     {"system": "borrower", "key": "reopened", "value": "Reopened", "category": "borrow_request_events_event_type", "description": "Request reopened"},
     {"system": "borrower", "key": "released", "value": "Released", "category": "borrow_request_events_event_type", "description": "Items released"},
     {"system": "borrower", "key": "returned", "value": "Returned", "category": "borrow_request_events_event_type", "description": "Items returned"},

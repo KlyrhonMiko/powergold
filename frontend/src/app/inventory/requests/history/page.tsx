@@ -54,6 +54,7 @@ export default function RequestHistoryPage() {
       case 'created': return 'bg-primary/10 text-primary border-primary/20';
       case 'approved': return 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
       case 'rejected': return 'bg-rose-500/10 text-rose-500 border-rose-500/20';
+      case 'voided': return 'bg-amber-500/10 text-amber-500 border-amber-500/20';
       case 'released': return 'bg-primary/10 text-primary border-primary/20 font-bold';
 
       case 'returned': return 'bg-primary/10 text-primary border-primary/20';
@@ -111,6 +112,7 @@ export default function RequestHistoryPage() {
                 <option value="created">Created</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
+                <option value="voided">Voided</option>
                 <option value="released">Released</option>
                 <option value="returned">Returned</option>
                 <option value="reopened">Reopened</option>

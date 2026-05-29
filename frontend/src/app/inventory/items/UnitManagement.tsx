@@ -28,6 +28,7 @@ import { FormSelect } from '@/components/ui/form-select';
 import { cn, parseSystemDate } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { QrCodeModal } from '@/components/ui/QrCodeModal';
+import { ActionConfirmModal } from '@/components/ui/ActionConfirmModal';
 import { QRCodeSVG } from 'qrcode.react';
 import { renderToString } from 'react-dom/server';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -44,9 +45,13 @@ const STATUS_COLORS: Record<string, string> = {
   available: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   borrowed: 'bg-primary/10 text-primary',
   maintenance: 'bg-primary/10 text-primary font-bold',
-
+  consumed: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  expired: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+  discarded: 'bg-slate-500/10 text-slate-600 dark:text-slate-400',
   retired: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
 };
+
+const REMOVABLE_UNIT_STATUSES = new Set(['maintenance', 'retired', 'consumed', 'expired', 'discarded']);
 
 export function UnitManagement({ itemId, onClose }: UnitManagementProps) {
   const [isAdding, setIsAdding] = useState(false);
@@ -54,6 +59,8 @@ export function UnitManagement({ itemId, onClose }: UnitManagementProps) {
   const [editingUnit, setEditingUnit] = useState<InventoryUnit | null>(null);
   const [qrCodeUnit, setQrCodeUnit] = useState<InventoryUnit | null>(null);
   const [selectedUnitIds, setSelectedUnitIds] = useState<Set<string>>(new Set());
+  const [removingUnit, setRemovingUnit] = useState<InventoryUnit | null>(null);
+  const [isRemovingUnit, setIsRemovingUnit] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -124,6 +131,23 @@ export function UnitManagement({ itemId, onClose }: UnitManagementProps) {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to retire unit';
       toast.error(message);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!removingUnit) return;
+
+    setIsRemovingUnit(true);
+    try {
+      await inventoryApi.removeUnit(itemId, removingUnit.unit_id);
+      toast.success('Unit removed');
+      setRemovingUnit(null);
+      invalidateQueries();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to remove unit';
+      toast.error(message);
+    } finally {
+      setIsRemovingUnit(false);
     }
   };
 
@@ -434,6 +458,15 @@ export function UnitManagement({ itemId, onClose }: UnitManagementProps) {
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
+                          {REMOVABLE_UNIT_STATUSES.has(unit.status) && (
+                            <button
+                              onClick={() => setRemovingUnit(unit)}
+                              className="p-1.5 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
+                              title="Remove"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -455,6 +488,33 @@ export function UnitManagement({ itemId, onClose }: UnitManagementProps) {
           onClose={() => setQrCodeUnit(null)}
         />
       )}
+
+      <ActionConfirmModal
+        open={removingUnit !== null}
+        title="Remove this unit?"
+        description="This will hide the unit from inventory screens while keeping it in the database for history and traceability."
+        icon={<Trash2 className="h-5 w-5" />}
+        confirmLabel="Remove Unit"
+        tone="danger"
+        confirming={isRemovingUnit}
+        onCancel={() => {
+          if (!isRemovingUnit) setRemovingUnit(null);
+        }}
+        onConfirm={() => void handleRemove()}
+        details={removingUnit ? (
+          <div className="space-y-1">
+            <p>
+              Unit ID: <span className="font-mono text-foreground">{removingUnit.unit_id}</span>
+            </p>
+            <p>
+              Serial: <span className="font-mono text-foreground">{removingUnit.serial_number}</span>
+            </p>
+            <p>
+              Current status: <span className="font-semibold capitalize text-foreground">{removingUnit.status.replace('_', ' ')}</span>
+            </p>
+          </div>
+        ) : null}
+      />
     </div>
   );
 }
@@ -469,7 +529,7 @@ interface UnitFormModalProps {
   onSuccess: () => void;
 }
 
-function UnitFormModal({
+export function UnitFormModal({
   itemId,
   isBatch,
   unit,
@@ -478,6 +538,7 @@ function UnitFormModal({
   onClose,
   onSuccess,
 }: UnitFormModalProps) {
+  const isUnitEditLocked = Boolean(unit && (unit.status === 'entrusted' || unit.status === 'borrowed'));
   const [formData, setFormData] = useState({
     serial_number: '',
     expiration_date: undefined as Date | undefined,
@@ -509,6 +570,7 @@ function UnitFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUnitEditLocked) return;
     try {
       const expirationDateStr = formData.expiration_date ? formatDateFns(formData.expiration_date, 'yyyy-MM-dd') : undefined;
 
@@ -602,27 +664,43 @@ function UnitFormModal({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <FormSelect
-            label="Condition"
-            value={formData.condition}
-            onChange={(v) => setFormData({ ...formData, condition: v })}
-            options={conditionConfigs.map((c) => ({
-              key: c.key,
-              label: c.value,
-            }))}
-            placeholder="Select condition"
-          />
-          {unit ? (
+          <div className="space-y-1.5">
             <FormSelect
-              label="Status"
-              value={formData.status}
-              onChange={(v) => setFormData({ ...formData, status: v })}
-              options={statusConfigs.map((c) => ({
+              label="Condition"
+              value={formData.condition}
+              onChange={(v) => setFormData({ ...formData, condition: v })}
+              options={conditionConfigs.map((c) => ({
                 key: c.key,
                 label: c.value,
               }))}
-              placeholder="Select status"
+              placeholder="Select condition"
+              disabled={isUnitEditLocked}
             />
+            {isUnitEditLocked && (
+              <p className="text-xs text-muted-foreground">
+                This unit is frozen while it is borrowed or entrusted.
+              </p>
+            )}
+          </div>
+          {unit ? (
+            <div className="space-y-1.5">
+              <FormSelect
+                label="Status"
+                value={formData.status}
+                onChange={(v) => setFormData({ ...formData, status: v })}
+                options={statusConfigs.map((c) => ({
+                  key: c.key,
+                  label: c.value,
+                }))}
+                placeholder="Select status"
+                disabled={isUnitEditLocked}
+              />
+              {isUnitEditLocked && (
+                <p className="text-xs text-muted-foreground">
+                  Status is locked while this unit is currently borrowed or entrusted.
+                </p>
+              )}
+            </div>
           ) : (
             <div className="space-y-1.5">
               <label className="block text-sm font-medium text-foreground">Expiration Date</label>
@@ -630,6 +708,7 @@ function UnitFormModal({
                 date={formData.expiration_date}
                 onChange={(date) => setFormData({ ...formData, expiration_date: date })}
                 placeholder="Select date"
+                disabled={isUnitEditLocked}
               />
             </div>
           )}
@@ -642,6 +721,7 @@ function UnitFormModal({
               date={formData.expiration_date}
               onChange={(date) => setFormData({ ...formData, expiration_date: date })}
               placeholder="Select date"
+              disabled={isUnitEditLocked}
             />
           </div>
         )}
@@ -652,7 +732,8 @@ function UnitFormModal({
             type="text"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all"
+            disabled={isUnitEditLocked}
+            className="w-full h-11 px-3.5 rounded-xl bg-muted/50 border border-border text-sm font-medium focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             placeholder="Optional note about this unit..."
           />
         </div>
@@ -667,7 +748,8 @@ function UnitFormModal({
           </button>
           <button
             type="submit"
-            className="flex-1 h-11 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm"
+            disabled={isUnitEditLocked}
+            className="flex-1 h-11 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {unit ? 'Save Changes' : isBatch ? `Create ${batchCount} Units` : 'Create Unit'}
           </button>

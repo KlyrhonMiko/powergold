@@ -37,6 +37,8 @@ export interface BorrowRequestCreate {
   notes?: string;
   return_at?: string;
   involved_people?: Record<string, unknown>[];
+  customer_name?: string;
+  location_name?: string;
   is_emergency?: boolean;
 }
 
@@ -227,6 +229,9 @@ export const borrowApi = {
 
   reject: (id: string, payload: BorrowActionPayload = {}) =>
     api.post<BorrowRequest>(`/inventory/borrowing/requests/${id}/reject`, payload),
+
+  void: (id: string, payload: BorrowActionPayload = {}) =>
+    api.post<BorrowRequest>(`/inventory/borrowing/requests/${id}/void`, payload),
 
   release: (id: string, payload: BorrowActionPayload = {}) =>
     api.post<BorrowRequest>(`/inventory/borrowing/requests/${id}/release`, payload),

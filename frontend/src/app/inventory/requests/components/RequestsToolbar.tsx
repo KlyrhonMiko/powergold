@@ -11,6 +11,7 @@ const TAB_LABELS: Record<string, string> = {
   released: 'Released',
   returned: 'Returned',
   rejected: 'Rejected',
+  voided: 'Voided',
 };
 
 export function RequestsToolbar({

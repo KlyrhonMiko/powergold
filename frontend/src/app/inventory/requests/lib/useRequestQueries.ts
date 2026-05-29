@@ -58,6 +58,7 @@ export function useBorrowMutations() {
       const handlers: Record<BorrowAction, BorrowActionHandler> = {
         approve: borrowApi.approve,
         reject: borrowApi.reject,
+        void: borrowApi.void,
         release: borrowApi.release,
         return: borrowApi.return,
         reopen: borrowApi.reopen,

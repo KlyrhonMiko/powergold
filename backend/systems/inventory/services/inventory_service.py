@@ -27,6 +27,8 @@ from systems.inventory.schemas.inventory_movement_schemas import (
 )
 from systems.inventory.models.inventory_batch import InventoryBatch
 from systems.inventory.models.borrow_request import BorrowRequest
+from systems.inventory.models.borrow_request_batch import BorrowRequestBatch
+from systems.inventory.models.entrusted_item import EntrustedItem
 from systems.inventory.schemas.inventory_batch_schemas import (
     InventoryBatchCreate,
     InventoryBatchUpdate,
@@ -82,6 +84,7 @@ UNIT_STATUS_CHANGE_NOTE_PATTERN = re.compile(
 UNIT_RETIRED_NOTE_PATTERN = re.compile(
     r"^Unit retired: (?P<unit_id>[A-Za-z0-9\-]+) \(Previous status: (?P<from_status>[a-z_]+)\)$"
 )
+REMOVABLE_UNIT_STATUSES = {"maintenance", "retired", "consumed", "expired", "discarded"}
 
 
 def _movement_increases_batch_total(movement_type: str, qty_change: Decimal) -> bool:
@@ -574,7 +577,10 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         if not item:
             return [], 0
             
-        statement = select(InventoryBatch).where(InventoryBatch.inventory_uuid == item.id)
+        statement = select(InventoryBatch).where(
+            InventoryBatch.inventory_uuid == item.id,
+            InventoryBatch.is_deleted.is_(False),
+        )
         
         if status:
             statement = statement.where(InventoryBatch.status == status)
@@ -678,6 +684,60 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             from systems.inventory.services.alert_service import alert_service
             alert_service.evaluate_stock_alerts(session, item.item_id)
         
+        return batch
+
+    def close_batch(
+        self,
+        session: Session,
+        batch_id: str,
+        actor_id: UUID | None = None,
+    ) -> InventoryBatch:
+        batch = self.get_batch(session, batch_id)
+        if not batch or batch.is_deleted:
+            raise ValueError(f"Batch {batch_id} not found")
+
+        if batch.available_qty != ZERO_QUANTITY:
+            raise ValueError("Only batches with 0 available quantity can be closed")
+
+        has_outstanding_release = session.exec(
+            select(BorrowRequestBatch.id).where(
+                BorrowRequestBatch.batch_uuid == batch.id,
+                BorrowRequestBatch.is_deleted.is_(False),
+                BorrowRequestBatch.released_at.is_not(None),
+                BorrowRequestBatch.returned_at.is_(None),
+            )
+        ).first()
+        if has_outstanding_release:
+            raise ValueError("Cannot close a batch with outstanding released quantities")
+
+        before = batch.model_dump(mode="json")
+        batch.is_deleted = True
+        batch.deleted_at = get_now_manila()
+        session.add(batch)
+
+        audit_service.log_action(
+            db=session,
+            entity_type="inventory_batch",
+            entity_id=batch.batch_id,
+            action="closed",
+            before=before,
+            after=batch.model_dump(mode="json"),
+            actor_id=actor_id,
+        )
+
+        item = session.exec(
+            select(InventoryItem).where(
+                InventoryItem.id == batch.inventory_uuid,
+                InventoryItem.is_deleted.is_(False),
+            )
+        ).first()
+        if item:
+            self._sync_item_quantities(session, item.item_id)
+
+            from systems.inventory.services.alert_service import alert_service
+
+            alert_service.evaluate_stock_alerts(session, item.item_id)
+
         return batch
 
     def _resolve_reference_context(
@@ -963,7 +1023,10 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         if not item:
             return []
         return session.exec(
-            select(InventoryUnit).where(InventoryUnit.inventory_uuid == item.id)
+            select(InventoryUnit).where(
+                InventoryUnit.inventory_uuid == item.id,
+                InventoryUnit.is_deleted.is_(False),
+            )
         ).all()
 
     def get_history(
@@ -1648,6 +1711,29 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         if next_status not in allowed_targets:
             raise ValueError(f"Invalid status transition: {current_status} -> {next_status}")
 
+    def _has_active_entrusted_assignment(self, session: Session, unit: InventoryUnit) -> bool:
+        return bool(
+            session.exec(
+                select(EntrustedItem.id).where(
+                    EntrustedItem.unit_uuid == unit.id,
+                    EntrustedItem.is_deleted.is_(False),
+                    EntrustedItem.returned_at.is_(None),
+                )
+            ).first()
+        )
+
+    def _is_unit_edit_locked(self, session: Session, unit: InventoryUnit) -> bool:
+        return unit.status == "borrowed" or self._has_active_entrusted_assignment(session, unit)
+
+    @staticmethod
+    def _entrusted_field_value_changed(
+        current_value: datetime | str | None,
+        incoming_value: datetime | str | None,
+    ) -> bool:
+        if isinstance(current_value, datetime) and isinstance(incoming_value, datetime):
+            return current_value != incoming_value
+        return current_value != incoming_value
+
     # ===== UNIT MANAGEMENT (Phase 2) =====
 
     def get_unit(self, session: Session, unit_id: str) -> InventoryUnit | None:
@@ -1931,6 +2017,20 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             "description": unit.description,
         }
 
+        is_edit_locked = self._is_unit_edit_locked(session, unit)
+        if is_edit_locked:
+            status_changed = status is not None and status != unit.status
+            expiration_changed = (
+                expiration_date is not None
+                and self._entrusted_field_value_changed(unit.expiration_date, expiration_date)
+            )
+            condition_changed = condition is not None and condition != unit.condition
+            description_changed = description is not None and description != unit.description
+            if status_changed or expiration_changed or condition_changed or description_changed:
+                raise ValueError(
+                    f"Unit {unit_id} is currently borrowed or entrusted and cannot be edited until it is returned"
+                )
+
         # Update only if provided
         if status is not None:
             self._validate_status_transition(session, unit.status, status)
@@ -2140,6 +2240,52 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
             
         return unit
 
+    def remove_unit(
+        self,
+        session: Session,
+        unit_id: str,
+        actor_id: UUID | None = None,
+    ) -> InventoryUnit:
+        unit = self.get_unit(session, unit_id)
+        if not unit or unit.is_deleted:
+            raise ValueError(f"Unit {unit_id} not found")
+
+        if unit.status not in REMOVABLE_UNIT_STATUSES:
+            allowed_statuses = ", ".join(sorted(REMOVABLE_UNIT_STATUSES))
+            raise ValueError(
+                f"Unit {unit_id} can only be removed when status is one of: {allowed_statuses}"
+            )
+
+        before = unit.model_dump(mode="json")
+        unit.is_deleted = True
+        unit.deleted_at = get_now_manila()
+        session.add(unit)
+
+        audit_service.log_action(
+            db=session,
+            entity_type="inventory_unit",
+            entity_id=unit.unit_id,
+            action="removed",
+            before=before,
+            after=unit.model_dump(mode="json"),
+            actor_id=actor_id,
+        )
+
+        item = session.exec(
+            select(InventoryItem).where(
+                InventoryItem.id == unit.inventory_uuid,
+                InventoryItem.is_deleted.is_(False),
+            )
+        ).first()
+        if item:
+            self._sync_item_quantities(session, item.item_id)
+
+            from systems.inventory.services.alert_service import alert_service
+
+            alert_service.evaluate_stock_alerts(session, item.item_id)
+
+        return unit
+
     def get_units_by_status(
         self,
         session: Session,
@@ -2158,7 +2304,10 @@ class InventoryService(BaseService[InventoryItem, InventoryItemCreate, Inventory
         if not item:
             return [], 0
 
-        statement = select(InventoryUnit).where(InventoryUnit.inventory_uuid == item.id)
+        statement = select(InventoryUnit).where(
+            InventoryUnit.inventory_uuid == item.id,
+            InventoryUnit.is_deleted.is_(False),
+        )
 
         if status:
             self._require_config_key(

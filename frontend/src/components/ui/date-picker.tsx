@@ -17,15 +17,17 @@ export interface DatePickerProps {
     date?: Date
     onChange?: (date: Date | undefined) => void
     placeholder?: string
+    disabled?: boolean
 }
 
-export function DatePicker({ date, onChange, placeholder = "Pick a date" }: DatePickerProps) {
+export function DatePicker({ date, onChange, placeholder = "Pick a date", disabled = false }: DatePickerProps) {
     return (
         <Popover>
             <PopoverTrigger
+                disabled={disabled}
                 className={cn(
                     buttonVariants({ variant: "outline" }),
-                    "w-full justify-start text-left font-normal h-11 px-3.5 rounded-xl bg-muted/50 border-border hover:bg-muted transition-all active:scale-100",
+                    "w-full justify-start text-left font-normal h-11 px-3.5 rounded-xl bg-muted/50 border-border hover:bg-muted transition-all active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed",
                     !date && "text-muted-foreground"
                 )}
             >

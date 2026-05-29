@@ -59,6 +59,7 @@ _DEFAULT_STATUSES = [
     "returned",
     "rejected",
     "closed",
+    "voided",
 ]
 
 _ACTIVE_BORROW_STATUSES = {"pending", "approved", "released"}
@@ -1955,6 +1956,53 @@ class BorrowService(
         session.add(event)
 
         session.add(db_request)
+        session.flush()
+        session.refresh(db_request)
+        return db_request
+
+    def void_request(
+        self,
+        session: Session,
+        request_id: str,
+        actor_id: UUID,
+        note: str | None = None,
+    ) -> BorrowRequest:
+        db_request = self.get(session, request_id)
+        if not db_request or db_request.status != "approved":
+            raise ValueError("Request must be in 'approved' status to be voided")
+
+        before_state = db_request.model_dump(mode="json")
+        self._require_borrow_status(session, "voided")
+        self._require_setting(
+            session,
+            key="voided",
+            table_name="borrow_request_events",
+            field_name="event_type",
+            field_label="borrow request event type",
+        )
+
+        db_request.status = "voided"
+        session.add(db_request)
+
+        event = BorrowRequestEvent(
+            event_id=get_next_sequence(session, BorrowRequestEvent, "event_id", "BRE"),
+            borrow_uuid=db_request.id,
+            event_type="voided",
+            actor_id=actor_id,
+            note=note,
+        )
+        session.add(event)
+
+        audit_service.log_action(
+            db=session,
+            entity_type="borrow",
+            entity_id=db_request.request_id,
+            action="void",
+            before=before_state,
+            after=db_request.model_dump(mode="json"),
+            actor_id=actor_id,
+        )
+
         session.flush()
         session.refresh(db_request)
         return db_request
