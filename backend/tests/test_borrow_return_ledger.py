@@ -837,6 +837,16 @@ def test_borrow_request_create_rejects_duplicate_item_ids():
         )
 
 
+def test_borrow_request_create_rejects_more_than_fifty_unique_items():
+    with pytest.raises(ValueError, match="at most 50 unique items"):
+        BorrowRequestCreate(
+            items=[
+                {"item_id": f"ITEM-{index:03d}", "qty_requested": 1}
+                for index in range(51)
+            ]
+        )
+
+
 def test_returned_request_does_not_block_new_identical_request(
     session: Session,
     services: tuple[InventoryService, BorrowService],

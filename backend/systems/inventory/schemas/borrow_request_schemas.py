@@ -10,6 +10,8 @@ from systems.inventory.quantity import (
 )
 from utils.time_utils import format_datetime
 
+MAX_BORROW_REQUEST_UNIQUE_ITEMS = 50
+
 
 class BorrowRequestItemCreate(BaseModel):
     """Schema for a single item in a multi-item borrow request."""
@@ -66,6 +68,10 @@ class BorrowRequestCreate(BaseModel):
         item_ids = [item.item_id for item in self.items]
         if len(item_ids) != len(set(item_ids)):
             raise ValueError("Borrow request items must have unique item_id values")
+        if len(self.items) > MAX_BORROW_REQUEST_UNIQUE_ITEMS:
+            raise ValueError(
+                f"Borrow requests may include at most {MAX_BORROW_REQUEST_UNIQUE_ITEMS} unique items"
+            )
         return self
 
 

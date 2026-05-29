@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Loader2, CheckCircle2, AlertCircle, Info, Layers, Sparkles } from 'lucide-react';
 import { parseSystemDate } from '@/lib/utils';
 import { borrowApi, BorrowRequest } from './api';
@@ -18,6 +18,7 @@ interface UnitSelectionModalProps {
   request: BorrowRequest;
   onClose: () => void;
   onSuccess: () => void;
+  onProcessingChange?: (isProcessing: boolean) => void;
 }
 
 interface BatchAvailability {
@@ -47,32 +48,20 @@ interface ItemAssignmentData {
   error: string | null;
 }
 
-export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectionModalProps) {
+export function UnitSelectionModal({
+  request,
+  onClose,
+  onSuccess,
+  onProcessingChange,
+}: UnitSelectionModalProps) {
   const [itemsData, setItemsData] = useState<ItemAssignmentData[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [notes, setNotes] = useState('');
+  const isBusy = loadingOptions || submitting;
 
-  // Initialize all items in the request
-  useEffect(() => {
-    const allItems = request.items.map(item => ({
-      itemId: item.item_id,
-      name: item.name,
-      qtyRequested: item.qty_requested,
-      unitOfMeasure: item.unit_of_measure,
-      isTrackable: !!item.is_trackable,
-      availableUnits: [],
-      selectedUnitIds: [],
-      availableBatches: [],
-      selectedBatches: [],
-      loading: true,
-      error: null,
-    }));
-    setItemsData(allItems);
-
-    void fetchAssignmentOptions(allItems);
-  }, [request]);
-
-  const fetchAssignmentOptions = async (allItems: ItemAssignmentData[]) => {
+  const fetchAssignmentOptions = useCallback(async (allItems: ItemAssignmentData[]) => {
+    setLoadingOptions(true);
     try {
       const res = await borrowApi.getAssignmentOptions(request.request_id);
       const optionMap = new Map(res.data.items.map((item) => [item.item_id, item]));
@@ -112,8 +101,30 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
           error: message,
         })),
       );
+    } finally {
+      setLoadingOptions(false);
     }
-  };
+  }, [request.request_id]);
+
+  // Initialize all items in the request
+  useEffect(() => {
+    const allItems = request.items.map(item => ({
+      itemId: item.item_id,
+      name: item.name,
+      qtyRequested: item.qty_requested,
+      unitOfMeasure: item.unit_of_measure,
+      isTrackable: !!item.is_trackable,
+      availableUnits: [],
+      selectedUnitIds: [],
+      availableBatches: [],
+      selectedBatches: [],
+      loading: true,
+      error: null,
+    }));
+    setItemsData(allItems);
+
+    void fetchAssignmentOptions(allItems);
+  }, [fetchAssignmentOptions, request]);
 
   const toggleUnitSelection = (itemId: string, unitId: string) => {
     setItemsData(prev => prev.map(item => {
@@ -224,6 +235,7 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
     }
 
     setSubmitting(true);
+    onProcessingChange?.(true);
     try {
       await borrowApi.assignInventory(request.request_id, {
         items: itemsData.map((item) => ({
@@ -245,6 +257,7 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
       toast.error(message);
     } finally {
       setSubmitting(false);
+      onProcessingChange?.(false);
     }
   };
 
@@ -266,7 +279,7 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-      <div className="w-full max-w-4xl bg-card border border-border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-4xl bg-card border border-border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-6 border-b border-border/50">
           <div>
             <h2 className="text-xl font-bold font-heading uppercase tracking-tight">Assign Inventory</h2>
@@ -275,14 +288,15 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
           <div className="flex items-center gap-2">
             {itemsData.length > 0 && (
               <button
+                disabled={isBusy}
                 onClick={autoAssignAll}
-                className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors uppercase tracking-wider"
+                className="flex items-center gap-1.5 px-3 h-9 rounded-xl bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 disabled:opacity-50 disabled:grayscale transition-colors uppercase tracking-wider"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 Auto Assign All
               </button>
             )}
-            <button onClick={onClose} aria-label="Close assignment modal" className="p-2 text-muted-foreground hover:bg-secondary rounded-full transition-colors">
+            <button disabled={isBusy} onClick={onClose} aria-label="Close assignment modal" className="p-2 text-muted-foreground hover:bg-secondary disabled:opacity-50 disabled:grayscale rounded-full transition-colors">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -315,8 +329,9 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
                 <div className="flex items-center gap-2">
                   {!item.loading && !item.error && getPercentageSelected(item) < 100 && (
                     <button
+                      disabled={isBusy}
                       onClick={() => item.isTrackable ? autoAssignTrackable(item.itemId) : autoAssignUntrackable(item.itemId)}
-                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 transition-colors uppercase tracking-wider"
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 disabled:opacity-50 disabled:grayscale transition-colors uppercase tracking-wider"
                     >
                       <Sparkles className="w-3 h-3" />
                       Auto
@@ -361,8 +376,9 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
                     return (
                       <button
                         key={unit.unit_id}
+                        disabled={isBusy}
                         onClick={() => toggleUnitSelection(item.itemId, unit.unit_id)}
-                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col gap-1.5 group ${isSelected
+                        className={`p-4 rounded-2xl border transition-all text-left flex flex-col gap-1.5 group disabled:opacity-60 disabled:grayscale ${isSelected
                           ? 'bg-primary/10 border-primary shadow-sm'
                           : 'hover:bg-background/50 border-border group-hover:border-primary/50'
                           }`}
@@ -418,22 +434,25 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
                         </div>
                         <div className="flex items-center gap-2">
                           <button
+                            disabled={isBusy}
                             onClick={() => handleBatchQtyChange(item.itemId, batch.batch_id, qty - 0.001)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary hover:bg-muted font-bold transition-colors"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary hover:bg-muted disabled:opacity-50 disabled:grayscale font-bold transition-colors"
                           >
                             -
                           </button>
                           <input
                             type="number"
                             value={qty}
+                            disabled={isBusy}
                             min={0}
                             step="0.001"
                             onChange={(e) => handleBatchQtyChange(item.itemId, batch.batch_id, parseQuantityInput(e.target.value, 0))}
-                            className="w-16 h-8 text-center bg-transparent border-b-2 border-primary/50 focus:border-primary outline-none text-sm font-bold"
+                            className="w-16 h-8 text-center bg-transparent border-b-2 border-primary/50 focus:border-primary disabled:opacity-50 outline-none text-sm font-bold"
                           />
                           <button
+                            disabled={isBusy}
                             onClick={() => handleBatchQtyChange(item.itemId, batch.batch_id, qty + 0.001)}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary hover:bg-muted font-bold transition-colors"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-secondary hover:bg-muted disabled:opacity-50 disabled:grayscale font-bold transition-colors"
                           >
                             +
                           </button>
@@ -452,16 +471,18 @@ export function UnitSelectionModal({ request, onClose, onSuccess }: UnitSelectio
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Assignment Notes (Optional)</label>
             <textarea
               value={notes}
+              disabled={isBusy}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add some context to this assignment..."
-              className="w-full h-20 p-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-sm font-medium resize-none shadow-inner"
+              className="w-full h-20 p-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60 transition-all text-sm font-medium resize-none shadow-inner"
             />
           </div>
 
           <div className="flex gap-3">
             <button
+              disabled={isBusy}
               onClick={onClose}
-              className="flex-1 h-12 rounded-2xl border border-border font-bold text-sm hover:bg-muted/50 transition-all uppercase tracking-wider"
+              className="flex-1 h-12 rounded-2xl border border-border font-bold text-sm hover:bg-muted/50 disabled:opacity-50 disabled:grayscale transition-all uppercase tracking-wider"
             >
               Cancel
             </button>

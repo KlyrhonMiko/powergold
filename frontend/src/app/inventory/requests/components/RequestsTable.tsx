@@ -46,10 +46,12 @@ function ActionButton({
   label,
   variant = 'default',
   onClick,
+  disabled = false,
 }: {
   label: string;
   variant?: 'default' | 'success' | 'danger' | 'secondary';
   onClick: () => void;
+  disabled?: boolean;
 }) {
   const styles = {
     default: 'bg-primary/10 text-primary hover:bg-primary/20 border-primary/20',
@@ -60,8 +62,9 @@ function ActionButton({
 
   return (
     <button
+      disabled={disabled}
       onClick={onClick}
-      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border ${styles[variant]}`}
+      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border disabled:opacity-50 disabled:grayscale ${styles[variant]}`}
       type="button"
     >
       {label}
@@ -357,6 +360,8 @@ export function RequestsTable({
   onSetReturningRequest,
   isFullyAssigned,
   onShowReceipt,
+  processingRequestId,
+  processingLabel,
 }: {
   records: BorrowRecord[];
   loading: boolean;
@@ -373,25 +378,28 @@ export function RequestsTable({
   onSetReturningRequest: (record: BorrowRecord) => void;
   isFullyAssigned: (record: BorrowRecord) => boolean;
   onShowReceipt: (requestId: string) => void;
+  processingRequestId?: string | null;
+  processingLabel?: string | null;
 }) {
   const renderActions = (record: BorrowRecord) => {
     const actions: ReactNode[] = [];
+    const isProcessingRow = processingRequestId === record.request_id;
 
     if (record.status === 'pending') {
       actions.push(
-        <ActionButton key="approve" label="Approve" variant="success" onClick={() => onSetConfirmingAction({ action: 'approve', requestId: record.request_id, actionLabel: 'Approve' })} />,
-        <ActionButton key="reject" label="Reject" variant="danger" onClick={() => onSetConfirmingAction({ action: 'reject', requestId: record.request_id, actionLabel: 'Reject' })} />,
+        <ActionButton key="approve" label="Approve" variant="success" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'approve', requestId: record.request_id, actionLabel: 'Approve' })} />,
+        <ActionButton key="reject" label="Reject" variant="danger" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'reject', requestId: record.request_id, actionLabel: 'Reject' })} />,
       );
     }
 
     if (record.status === 'approved') {
       actions.push(
-        <ActionButton key="assign" label={isFullyAssigned(record) ? 'Reassign' : 'Assign'} onClick={() => onSetAssigningRequest(record)} />,
-        <ActionButton key="void" label="Void" variant="danger" onClick={() => onSetConfirmingAction({ action: 'void', requestId: record.request_id, actionLabel: 'Void' })} />,
+        <ActionButton key="assign" label={isFullyAssigned(record) ? 'Reassign' : 'Assign'} disabled={isProcessingRow} onClick={() => onSetAssigningRequest(record)} />,
+        <ActionButton key="void" label="Void" variant="danger" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'void', requestId: record.request_id, actionLabel: 'Void' })} />,
       );
       if (isFullyAssigned(record)) {
         actions.push(
-          <ActionButton key="release" label="Release" variant="success" onClick={() => onSetConfirmingAction({ action: 'release', requestId: record.request_id, actionLabel: 'Release' })} />,
+          <ActionButton key="release" label="Release" variant="success" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'release', requestId: record.request_id, actionLabel: 'Release' })} />,
         );
       }
 
@@ -399,33 +407,33 @@ export function RequestsTable({
 
     if (record.status === 'released') {
       actions.push(
-        <ActionButton key="receipt" label="Receipt" variant="default" onClick={() => onShowReceipt(record.request_id)} />,
-        <ActionButton key="return" label="Return" variant="success" onClick={() => onSetReturningRequest(record)} />,
+        <ActionButton key="receipt" label="Receipt" variant="default" disabled={isProcessingRow} onClick={() => onShowReceipt(record.request_id)} />,
+        <ActionButton key="return" label="Return" variant="success" disabled={isProcessingRow} onClick={() => onSetReturningRequest(record)} />,
       );
       if (record.items.every((it) => !it.is_trackable)) {
         actions.push(
-          <ActionButton key="close" label="Close" variant="secondary" onClick={() => onSetConfirmingAction({ action: 'close', requestId: record.request_id, actionLabel: 'Close' })} />,
+          <ActionButton key="close" label="Close" variant="secondary" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'close', requestId: record.request_id, actionLabel: 'Close' })} />,
         );
       }
     }
 
     if (record.status === 'returned') {
       actions.push(
-        <ActionButton key="receipt" label="Receipt" variant="default" onClick={() => onShowReceipt(record.request_id)} />,
-        <ActionButton key="close" label="Close" variant="secondary" onClick={() => onSetConfirmingAction({ action: 'close', requestId: record.request_id, actionLabel: 'Close' })} />,
+        <ActionButton key="receipt" label="Receipt" variant="default" disabled={isProcessingRow} onClick={() => onShowReceipt(record.request_id)} />,
+        <ActionButton key="close" label="Close" variant="secondary" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'close', requestId: record.request_id, actionLabel: 'Close' })} />,
       );
     }
 
     if (record.status === 'rejected') {
       actions.push(
-        <ActionButton key="reopen" label="Reopen" onClick={() => onSetConfirmingAction({ action: 'reopen', requestId: record.request_id, actionLabel: 'Reopen' })} />,
-        <ActionButton key="close" label="Close" variant="secondary" onClick={() => onSetConfirmingAction({ action: 'close', requestId: record.request_id, actionLabel: 'Close' })} />,
+        <ActionButton key="reopen" label="Reopen" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'reopen', requestId: record.request_id, actionLabel: 'Reopen' })} />,
+        <ActionButton key="close" label="Close" variant="secondary" disabled={isProcessingRow} onClick={() => onSetConfirmingAction({ action: 'close', requestId: record.request_id, actionLabel: 'Close' })} />,
       );
     }
 
     if (record.status === 'closed') {
       actions.push(
-        <ActionButton key="receipt" label="Receipt" variant="default" onClick={() => onShowReceipt(record.request_id)} />,
+        <ActionButton key="receipt" label="Receipt" variant="default" disabled={isProcessingRow} onClick={() => onShowReceipt(record.request_id)} />,
       );
       return (
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -445,7 +453,17 @@ export function RequestsTable({
       );
     }
 
-    return <div className="flex items-center gap-1.5 flex-wrap justify-end">{actions}</div>;
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+        {actions}
+        {isProcessingRow && processingLabel && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold text-primary">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {processingLabel}
+          </span>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -506,12 +524,15 @@ export function RequestsTable({
           ) : records.map((record) => {
             const isExpanded = expandedIds.has(record.request_id);
             const totalQty = sumQuantities(record.items.map((item) => item.qty_requested));
+            const isProcessingRow = processingRequestId === record.request_id;
 
             return (
               <Fragment key={record.request_id}>
                 <tr
-                  onClick={() => onToggleRow(record.request_id)}
-                  className={`border-b border-border/40 transition-colors cursor-pointer group ${isExpanded ? 'bg-muted/10' : 'hover:bg-muted/20'
+                  aria-busy={isProcessingRow}
+                  onClick={isProcessingRow ? undefined : () => onToggleRow(record.request_id)}
+                  className={`border-b border-border/40 transition-colors group ${isExpanded ? 'bg-muted/10' : 'hover:bg-muted/20'
+                    } ${isProcessingRow ? 'cursor-wait opacity-80' : 'cursor-pointer'
                     }`}
                 >
                   <td className="py-3.5 pl-5 w-8">

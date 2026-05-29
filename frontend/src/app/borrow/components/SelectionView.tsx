@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import type { BorrowCatalogItem } from '../api';
 import { CartItem } from '../lib/types';
+import {
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS,
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE,
+} from '../lib/requestLimits';
 import { formatCategoryLabel } from '../lib/utils';
 import { formatQuantity, formatQuantityWithUnit } from '@/lib/inventoryQuantity';
 import {
@@ -80,6 +84,7 @@ export function SelectionView({
 
   const selectedKindLabel = selectedItemKind === 'trackable' ? 'Equipments' : 'Materials';
   const description = pageDescription ?? `Browse and add ${selectedKindLabel.toLowerCase()} to your request`;
+  const maxUniqueItemsReached = cart.length >= MAX_BORROW_REQUEST_UNIQUE_ITEMS;
 
   return (
     <>
@@ -152,6 +157,12 @@ export function SelectionView({
                 );
               })}
             </div>
+
+            {maxUniqueItemsReached && (
+              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+                {MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE} You can still adjust quantities for selected items.
+              </div>
+            )}
           </div>
 
           {/* Item Grid */}
@@ -180,13 +191,15 @@ export function SelectionView({
                     const inCart = cart.find((c) => c.item_id === item.item_id);
                     const outOfStock = item.available_qty <= 0;
                     const atStockLimit = Boolean(inCart && inCart.cartQty >= item.available_qty);
+                    const blockedByUniqueItemLimit = !inCart && maxUniqueItemsReached;
                     return (
                       <button
                         key={item.item_id}
                         onClick={() => onAddToCart(item)}
-                        disabled={outOfStock || atStockLimit}
+                        disabled={outOfStock || atStockLimit || blockedByUniqueItemLimit}
+                        title={blockedByUniqueItemLimit ? MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE : undefined}
                         className={`group relative flex flex-col text-left p-3 lg:p-4 rounded-xl border bg-card transition-all duration-200
-                        ${outOfStock || atStockLimit
+                        ${outOfStock || atStockLimit || blockedByUniqueItemLimit
                           ? 'opacity-40 cursor-not-allowed grayscale'
                           : 'hover:shadow-lg hover:-translate-y-0.5 hover:border-primary/30 active:translate-y-0 active:shadow-md active:scale-[0.98]'
                         }
@@ -277,7 +290,7 @@ export function SelectionView({
                 <h2 className="font-semibold text-base">Borrow Request</h2>
                 {cart.length > 0 && (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {cart.length} item{cart.length !== 1 ? 's' : ''} selected
+                    {cart.length} of {MAX_BORROW_REQUEST_UNIQUE_ITEMS} unique items selected
                   </p>
                 )}
               </div>
@@ -393,7 +406,7 @@ export function SelectionView({
                   <ShoppingCart className="w-4 h-4 text-primary" />
                 </div>
                 <h3 className="font-semibold text-sm">
-                  {cart.length} item{cart.length !== 1 ? 's' : ''} selected
+                  {cart.length} / {MAX_BORROW_REQUEST_UNIQUE_ITEMS} unique items selected
                 </h3>
               </div>
               <div className="flex items-center gap-2">
@@ -473,7 +486,7 @@ export function SelectionView({
                 </div>
                 <div className="text-left min-w-0">
                   <p className="text-sm font-semibold">
-                    {cart.length} item{cart.length !== 1 ? 's' : ''}
+                    {cart.length} / {MAX_BORROW_REQUEST_UNIQUE_ITEMS} unique
                   </p>
                   <p className="text-[10px] text-muted-foreground">Tap to review</p>
                 </div>

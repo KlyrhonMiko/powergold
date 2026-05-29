@@ -14,6 +14,7 @@ interface ReturnModalProps {
   request: BorrowRequest;
   onClose: () => void;
   onSuccess: () => void;
+  onProcessingChange?: (isProcessing: boolean) => void;
 }
 
 interface UnitReturnState {
@@ -33,7 +34,12 @@ interface BatchReturnState {
   qty_returned: number;
 }
 
-export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
+export function ReturnModal({
+  request,
+  onClose,
+  onSuccess,
+  onProcessingChange,
+}: ReturnModalProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [assignedUnits, setAssignedUnits] = useState<BorrowRequestUnit[]>([]);
@@ -44,6 +50,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
   const [globalCondition, setGlobalCondition] = useState('');
   const [globalConditionOpen, setGlobalConditionOpen] = useState(false);
   const [openConditionUnit, setOpenConditionUnit] = useState<string | null>(null);
+  const isBusy = loading || submitting;
 
   const hasTrackableItems = request.items.some((item) => !!item.is_trackable);
 
@@ -97,7 +104,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
       }
     };
     fetchData();
-  }, [request.request_id]);
+  }, [request.items, request.request_id]);
 
   const updateUnitReturn = (unitId: string, field: 'condition_on_return' | 'notes', value: string) => {
     setUnitReturns(prev => prev.map(u =>
@@ -122,6 +129,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
 
   const handleReturn = async () => {
     setSubmitting(true);
+    onProcessingChange?.(true);
     try {
       const unit_returns: BorrowUnitReturn[] = unitReturns.map(u => ({
         unit_id: u.unit_id,
@@ -147,12 +155,13 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
       toast.error(message);
     } finally {
       setSubmitting(false);
+      onProcessingChange?.(false);
     }
   };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-      <div className="w-full max-w-3xl bg-card border border-border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
+      <div className="relative w-full max-w-3xl bg-card border border-border rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-6 border-b border-border/50">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-emerald-500/10 text-emerald-500">
@@ -165,7 +174,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
               </p>
             </div>
           </div>
-          <button onClick={onClose} aria-label="Close return modal" className="p-2 text-muted-foreground hover:bg-secondary rounded-full transition-colors">
+          <button disabled={isBusy} onClick={onClose} aria-label="Close return modal" className="p-2 text-muted-foreground hover:bg-secondary disabled:opacity-50 disabled:grayscale rounded-full transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -186,7 +195,8 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Set all:</span>
                         <Popover open={globalConditionOpen} onOpenChange={setGlobalConditionOpen}>
-                          <PopoverTrigger
+                        <PopoverTrigger
+                            disabled={isBusy}
                             type="button"
                             className={cn(
                               "relative h-8 pl-3 pr-7 rounded-lg border text-xs font-bold text-left focus:outline-none focus:ring-2 focus:ring-primary/25 transition-all cursor-pointer",
@@ -219,8 +229,8 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                           </PopoverContent>
                         </Popover>
                         <button
+                          disabled={isBusy || !globalCondition}
                           onClick={applyGlobalCondition}
-                          disabled={!globalCondition}
                           className="h-8 px-3 rounded-lg bg-primary/10 text-primary text-[10px] font-bold hover:bg-primary/20 disabled:opacity-50 transition-colors uppercase tracking-wider"
                         >
                           Apply
@@ -250,6 +260,7 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                               onOpenChange={(open) => setOpenConditionUnit(open ? unitReturn.unit_id : null)}
                             >
                               <PopoverTrigger
+                                disabled={isBusy}
                                 type="button"
                                 className={cn(
                                   "relative h-9 pl-3 pr-8 rounded-xl border text-xs font-bold text-left focus:outline-none focus:ring-2 focus:ring-primary/25 transition-all cursor-pointer min-w-[120px]",
@@ -301,18 +312,20 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                             <input
                               type="text"
                               value={unitReturn.condition_on_return}
+                              disabled={isBusy}
                               onChange={(e) => updateUnitReturn(unitReturn.unit_id, 'condition_on_return', e.target.value)}
                               placeholder="Condition (optional)"
-                              className="h-9 w-36 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-xs font-medium"
+                              className="h-9 w-36 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 transition-all text-xs font-medium"
                             />
                           )}
                         </div>
                         <input
                           type="text"
                           value={unitReturn.notes}
+                          disabled={isBusy}
                           onChange={(e) => updateUnitReturn(unitReturn.unit_id, 'notes', e.target.value)}
                           placeholder="Notes for this unit (optional)..."
-                          className="w-full h-9 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-xs font-medium"
+                          className="w-full h-9 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 transition-all text-xs font-medium"
                         />
                       </div>
                     ))}
@@ -376,20 +389,23 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
                               max={batchReturn.qty_assigned}
                               step="0.001"
                               value={batchReturn.qty_returned}
+                              disabled={isBusy}
                               onChange={(e) => updateBatchReturn(batchReturn.borrow_batch_id, parseQuantityInput(e.target.value, 0))}
-                              className="h-10 w-28 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-sm font-bold"
+                              className="h-10 w-28 px-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 transition-all text-sm font-bold"
                             />
                             <button
                               type="button"
+                              disabled={isBusy}
                               onClick={() => updateBatchReturn(batchReturn.borrow_batch_id, batchReturn.qty_assigned)}
-                              className="h-10 px-3 rounded-xl border border-border text-xs font-bold hover:bg-muted/50 transition-colors uppercase tracking-wider"
+                              className="h-10 px-3 rounded-xl border border-border text-xs font-bold hover:bg-muted/50 disabled:opacity-50 disabled:grayscale transition-colors uppercase tracking-wider"
                             >
                               Full
                             </button>
                             <button
                               type="button"
+                              disabled={isBusy}
                               onClick={() => updateBatchReturn(batchReturn.borrow_batch_id, 0)}
-                              className="h-10 px-3 rounded-xl border border-border text-xs font-bold hover:bg-muted/50 transition-colors uppercase tracking-wider"
+                              className="h-10 px-3 rounded-xl border border-border text-xs font-bold hover:bg-muted/50 disabled:opacity-50 disabled:grayscale transition-colors uppercase tracking-wider"
                             >
                               Zero
                             </button>
@@ -424,16 +440,18 @@ export function ReturnModal({ request, onClose, onSuccess }: ReturnModalProps) {
             <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">Return Notes (Optional)</label>
             <textarea
               value={globalNotes}
+              disabled={isBusy}
               onChange={(e) => setGlobalNotes(e.target.value)}
               placeholder="General notes about this return..."
-              className="w-full h-20 p-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-sm font-medium resize-none shadow-inner"
+              className="w-full h-20 p-3 rounded-xl bg-input/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60 transition-all text-sm font-medium resize-none shadow-inner"
             />
           </div>
 
           <div className="flex gap-3">
             <button
+              disabled={isBusy}
               onClick={onClose}
-              className="flex-1 h-12 rounded-2xl border border-border font-bold text-sm hover:bg-muted/50 transition-all uppercase tracking-wider"
+              className="flex-1 h-12 rounded-2xl border border-border font-bold text-sm hover:bg-muted/50 disabled:opacity-50 disabled:grayscale transition-all uppercase tracking-wider"
             >
               Cancel
             </button>

@@ -13,6 +13,10 @@ import { api } from '@/lib/api';
 import { CartItem } from './lib/types';
 import { validateBorrowSubmission, validatePinVerificationInput } from './lib/validation';
 import {
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS,
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE,
+} from './lib/requestLimits';
+import {
   BORROW_KIOSK_ROLE_ERROR,
   BORROW_KIOSK_TWO_FACTOR_ERROR,
   isBorrowerRole,
@@ -118,6 +122,8 @@ export default function BorrowPage() {
 
   const addToCart = (item: BorrowCatalogItem) => {
     const step = 1;
+    let limitReached = false;
+
     setCart((prev) => {
       const existing = prev.find((i) => i.item_id === item.item_id);
       if (existing) {
@@ -133,8 +139,18 @@ export default function BorrowPage() {
             : i,
         );
       }
+
+      if (prev.length >= MAX_BORROW_REQUEST_UNIQUE_ITEMS) {
+        limitReached = true;
+        return prev;
+      }
+
       return [...prev, { ...item, cartQty: Math.min(step, Math.max(item.available_qty, step)) }];
     });
+
+    if (limitReached) {
+      toast.error(MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE);
+    }
   };
 
   const updateCartQty = (id: string, delta: number) => {
