@@ -283,6 +283,10 @@ class BorrowRequestClose(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=500)
 
 
+class BorrowRequestVoid(BaseModel):
+    notes: Optional[str] = Field(default=None, max_length=500)
+
+
 class ReleaseReceiptItemRead(BaseModel):
     item_id: str
     name: str

@@ -21,6 +21,16 @@ import { useInventoryWebSocket } from '@/hooks/useInventoryWebSocket';
 import { logger } from '@/lib/logger';
 import { areQuantitiesEqual, sumQuantities } from '@/lib/inventoryQuantity';
 
+const ACTION_SUCCESS_LABELS: Record<BorrowAction, string> = {
+  approve: 'approved',
+  reject: 'rejected',
+  void: 'voided',
+  release: 'released',
+  return: 'returned',
+  reopen: 'reopened',
+  close: 'closed',
+};
+
 export default function BorrowsPage() {
   useInventoryWebSocket();
 
@@ -124,7 +134,7 @@ export default function BorrowsPage() {
   const handleAction = async (action: BorrowAction, requestId: string, notes?: string) => {
     try {
       await executeAction.mutateAsync({ action, id: requestId, payload: { notes } });
-      toast.success(`Request ${action.replaceAll('_', ' ')}d successfully`);
+      toast.success(`Request ${ACTION_SUCCESS_LABELS[action]} successfully`);
 
       if (expandedIds.has(requestId)) {
         void fetchRequestEvents(requestId, true);

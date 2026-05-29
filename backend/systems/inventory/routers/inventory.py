@@ -620,6 +620,44 @@ async def retire_unit(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post(
+    "/{item_id}/units/{unit_id}/remove",
+    response_model=GenericResponse[InventoryUnitRead],
+    responses={
+        400: {"model": GenericResponse},
+        401: {"model": GenericResponse},
+        404: {"model": GenericResponse},
+    },
+)
+async def remove_unit(
+    item_id: str,
+    unit_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(shift_guard),
+    __: None = Depends(require_permission("inventory:units:manage")),
+    ___: None = Depends(require_system_access("inventory")),
+):
+    try:
+        unit = inventory_service.remove_unit(
+            session,
+            unit_id=unit_id,
+            actor_id=current_user.id,
+        )
+        session.commit()
+        await manager.broadcast_catalog_update()
+        session.refresh(unit)
+        unit_read = InventoryUnitRead.model_validate(unit)
+
+        return create_success_response(
+            data=unit_read, message="Unit removed successfully", request=request
+        )
+    except ValueError as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get(
     "/{item_id}/batches",
     response_model=GenericResponse[list[InventoryBatchRead]],
@@ -728,6 +766,40 @@ async def update_batch(
     except ValueError as e:
         session.rollback()
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post(
+    "/{item_id}/batches/{batch_id}/close",
+    response_model=GenericResponse[InventoryBatchRead],
+    responses={404: {"model": GenericResponse}, 401: {"model": GenericResponse}},
+)
+async def close_batch(
+    item_id: str,
+    batch_id: str,
+    request: Request,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _: User = Depends(shift_guard),
+    __: None = Depends(require_permission("inventory:units:manage")),
+    ___: None = Depends(require_system_access("inventory")),
+):
+    try:
+        batch = inventory_service.close_batch(
+            session,
+            batch_id=batch_id,
+            actor_id=current_user.id,
+        )
+        session.commit()
+        await manager.broadcast_catalog_update()
+        session.refresh(batch)
+        batch_read = InventoryBatchRead.model_validate(batch)
+
+        return create_success_response(
+            data=batch_read, message="Batch closed successfully", request=request
+        )
+    except ValueError as e:
+        session.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post(

@@ -657,6 +657,7 @@ def seed_borrow_request_configurations(headers: dict[str, str]) -> None:
         ("returned",           "4", "Items have been returned (terminal)"),
         ("rejected",           "5", "Request rejected by approver (terminal)"),
         ("closed",             "6", "Request administratively closed (terminal)"),
+        ("voided",             "7", "Request voided/cancelled after approval (terminal)"),
     ]
     for key, value, desc in statuses:
         create_setting(headers, system="borrower", key=key, value=value, category="borrow_requests_status", description=desc, endpoint="/api/inventory/config/borrower")
@@ -701,6 +702,7 @@ def seed_borrow_request_configurations(headers: dict[str, str]) -> None:
         ("created", "Created", "Request created"),
         ("approved", "Approved", "Request approved"),
         ("rejected", "Rejected", "Request rejected"),
+        ("voided", "Voided", "Request voided/cancelled"),
         ("reopened", "Reopened", "Request reopened"),
         ("released", "Released", "Items released"),
         ("returned", "Returned", "Items returned"),

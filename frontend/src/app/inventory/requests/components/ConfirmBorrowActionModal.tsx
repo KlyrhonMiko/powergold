@@ -8,6 +8,7 @@ import {
   Undo2,
   Archive,
   RotateCcw,
+  Ban,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -21,6 +22,11 @@ const ACTION_CONFIG: Record<string, { icon: ReactNode; color: string; btnClass: 
     icon: <XCircle className="w-5 h-5" />,
     color: 'text-rose-600 bg-rose-50',
     btnClass: 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm',
+  },
+  void: {
+    icon: <Ban className="w-5 h-5" />,
+    color: 'text-rose-700 bg-rose-50',
+    btnClass: 'bg-rose-700 hover:bg-rose-800 text-white shadow-sm',
   },
   release: {
     icon: <PackageOpen className="w-5 h-5" />,

@@ -186,6 +186,9 @@ export const inventoryApi = {
   retireUnit: (itemId: string, unitId: string) =>
     api.delete<InventoryUnit>(`/inventory/items/${itemId}/units/${unitId}`),
 
+  removeUnit: (itemId: string, unitId: string) =>
+    api.post<InventoryUnit>(`/inventory/items/${itemId}/units/${unitId}/remove`, {}),
+
   // Batches
   listBatches: (itemId: string, params: { page?: number; per_page?: number; status?: string; include_expired?: boolean } = {}) =>
     api.get<InventoryBatch[]>(`/inventory/items/${itemId}/batches${buildQueryString(params as Record<string, unknown>)}`),
@@ -195,6 +198,9 @@ export const inventoryApi = {
 
   updateBatch: (itemId: string, batchId: string, data: InventoryBatchUpdate) =>
     api.patch<InventoryBatch>(`/inventory/items/${itemId}/batches/${batchId}`, data),
+
+  closeBatch: (itemId: string, batchId: string) =>
+    api.post<InventoryBatch>(`/inventory/items/${itemId}/batches/${batchId}/close`, {}),
 
   adjustStock: (itemId: string, data: StockAdjustmentPayload) =>
     api.post<InventoryItem>(`/inventory/items/${itemId}/adjust-stock`, data),

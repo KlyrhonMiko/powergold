@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { format, isValid } from 'date-fns';
 import { AssignEntrustedItemModal } from './AssignEntrustedItemModal';
 import { Pagination } from '@/components/ui/Pagination';
+import { ActionConfirmModal } from '@/components/ui/ActionConfirmModal';
 import type { PaginationMeta } from '@/lib/api';
 
 function getErrorMessage(error: unknown): string {
@@ -38,6 +39,8 @@ export default function EntrustedItemsPage() {
     const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
     const [revoking, setRevoking] = useState<string | null>(null);
     const [isExporting, setIsExporting] = useState(false);
+    const [revokeTarget, setRevokeTarget] = useState<EntrustedItem | null>(null);
+    const [revokeNotes, setRevokeNotes] = useState('');
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -74,14 +77,18 @@ export default function EntrustedItemsPage() {
     }, [fetchItems]);
 
 
-    const handleRevoke = async (userId: string, assignmentId: string) => {
-        const confirmation = window.confirm('Are you sure you want to revoke this item?');
-        if (!confirmation) return;
+    const handleRevoke = async () => {
+        if (!revokeTarget) return;
 
-        setRevoking(assignmentId);
+        setRevoking(revokeTarget.assignment_id);
         try {
-            await userApi.revokeEntrustedItem(userId, assignmentId, { notes: '' });
+            const trimmedNotes = revokeNotes.trim();
+            await userApi.revokeEntrustedItem(revokeTarget.assigned_to_user_id, revokeTarget.assignment_id, {
+                notes: trimmedNotes || undefined,
+            });
             toast.success('Item revoked successfully');
+            setRevokeTarget(null);
+            setRevokeNotes('');
             fetchItems();
         } catch (error: unknown) {
             toast.error(getErrorMessage(error));
@@ -313,7 +320,10 @@ export default function EntrustedItemsPage() {
                                         <div className="flex items-center justify-end">
                                             {!item.returned_at && (
                                                 <button
-                                                    onClick={() => handleRevoke(item.assigned_to_user_id, item.assignment_id)}
+                                                    onClick={() => {
+                                                        setRevokeTarget(item);
+                                                        setRevokeNotes('');
+                                                    }}
                                                     disabled={revoking === item.assignment_id}
                                                     className="inline-flex items-center gap-1.5 px-3 py-2 text-sm text-muted-foreground hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors shrink-0"
                                                 >
@@ -359,7 +369,10 @@ export default function EntrustedItemsPage() {
                                         {!item.returned_at && (
                                             <div className="flex flex-wrap items-center gap-2 pl-[52px]">
                                                 <button
-                                                    onClick={() => handleRevoke(item.assigned_to_user_id, item.assignment_id)}
+                                                    onClick={() => {
+                                                        setRevokeTarget(item);
+                                                        setRevokeNotes('');
+                                                    }}
                                                     disabled={revoking === item.assignment_id}
                                                     className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-red-500 bg-red-500/10 rounded-lg transition-colors hover:bg-red-500/20 shrink-0"
                                                 >
@@ -397,6 +410,40 @@ export default function EntrustedItemsPage() {
                     }}
                 />
             )}
+
+            <ActionConfirmModal
+                open={revokeTarget !== null}
+                title="Revoke this entrusted item?"
+                description="This will mark the entrusted assignment as returned and release the unit from the active entrusted list."
+                icon={<RefreshCcw className="h-5 w-5" />}
+                confirmLabel="Revoke Item"
+                tone="warning"
+                confirming={revokeTarget ? revoking === revokeTarget.assignment_id : false}
+                onCancel={() => {
+                    if (!revoking) {
+                        setRevokeTarget(null);
+                        setRevokeNotes('');
+                    }
+                }}
+                onConfirm={() => void handleRevoke()}
+                noteLabel="Revocation note (optional)"
+                notePlaceholder="Add an optional return or revocation note..."
+                noteValue={revokeNotes}
+                onNoteChange={setRevokeNotes}
+                details={revokeTarget ? (
+                    <div className="space-y-1">
+                        <p>
+                            Assignment: <span className="font-mono text-foreground">{revokeTarget.assignment_id}</span>
+                        </p>
+                        <p>
+                            Employee: <span className="font-semibold text-foreground">{revokeTarget.assigned_to_name || 'Unknown User'}</span>
+                        </p>
+                        <p>
+                            Unit: <span className="font-mono text-foreground">{revokeTarget.serial_number || revokeTarget.unit_id}</span>
+                        </p>
+                    </div>
+                ) : null}
+            />
         </div>
     );
 }

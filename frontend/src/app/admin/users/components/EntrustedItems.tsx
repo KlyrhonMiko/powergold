@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { userApi, EntrustedItem } from '../api';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { ActionConfirmModal } from '@/components/ui/ActionConfirmModal';
 
 interface EntrustedItemsProps {
     userId: string;
@@ -17,6 +18,8 @@ export function EntrustedItems({ userId }: EntrustedItemsProps) {
     const [assigning, setAssigning] = useState(false);
     const [newUnitId, setNewUnitId] = useState('');
     const [revoking, setRevoking] = useState<string | null>(null);
+    const [revokeTarget, setRevokeTarget] = useState<EntrustedItem | null>(null);
+    const [revokeNotes, setRevokeNotes] = useState('');
 
     const fetchItems = useCallback(async () => {
         try {
@@ -51,13 +54,16 @@ export function EntrustedItems({ userId }: EntrustedItemsProps) {
         }
     };
 
-    const handleRevoke = async (assignmentId: string) => {
-        const confirmation = window.confirm('Are you sure you want to revoke this item?');
-        if (!confirmation) return;
-        setRevoking(assignmentId);
+    const handleRevoke = async () => {
+        if (!revokeTarget) return;
+
+        setRevoking(revokeTarget.assignment_id);
         try {
-            await userApi.revokeEntrustedItem(userId, assignmentId, { notes: 'Revoked from dashboard' });
+            const trimmedNotes = revokeNotes.trim();
+            await userApi.revokeEntrustedItem(userId, revokeTarget.assignment_id, { notes: trimmedNotes || undefined });
             toast.success('Item revoked successfully');
+            setRevokeTarget(null);
+            setRevokeNotes('');
             await fetchItems();
         } catch (error: unknown) {
             toast.error(error instanceof Error ? error.message : 'Failed to revoke item');
@@ -142,7 +148,10 @@ export function EntrustedItems({ userId }: EntrustedItemsProps) {
                                     </div>
                                     {!item.returned_at && (
                                         <button
-                                            onClick={() => handleRevoke(item.assignment_id)}
+                                            onClick={() => {
+                                                setRevokeTarget(item);
+                                                setRevokeNotes('');
+                                            }}
                                             disabled={revoking === item.assignment_id}
                                             className="px-3 py-1.5 rounded-lg border border-red-500/20 text-red-600 bg-red-500/5 hover:bg-red-500/10 text-xs font-bold transition-colors flex items-center gap-1.5 shrink-0"
                                         >
@@ -160,6 +169,40 @@ export function EntrustedItems({ userId }: EntrustedItemsProps) {
                     )}
                 </div>
             </div>
+
+            <ActionConfirmModal
+                open={revokeTarget !== null}
+                title="Revoke this entrusted item?"
+                description="This will mark the entrusted assignment as returned and release the unit from the employee dashboard."
+                icon={<RefreshCcw className="h-5 w-5" />}
+                confirmLabel="Revoke Item"
+                tone="warning"
+                confirming={revokeTarget ? revoking === revokeTarget.assignment_id : false}
+                onCancel={() => {
+                    if (!revoking) {
+                        setRevokeTarget(null);
+                        setRevokeNotes('');
+                    }
+                }}
+                onConfirm={() => void handleRevoke()}
+                noteLabel="Revocation note (optional)"
+                notePlaceholder="Add an optional return or revocation note..."
+                noteValue={revokeNotes}
+                onNoteChange={setRevokeNotes}
+                details={revokeTarget ? (
+                    <div className="space-y-1">
+                        <p>
+                            Assignment: <span className="font-mono text-foreground">{revokeTarget.assignment_id}</span>
+                        </p>
+                        <p>
+                            Unit: <span className="font-mono text-foreground">{revokeTarget.serial_number || revokeTarget.unit_id}</span>
+                        </p>
+                        <p>
+                            Item: <span className="font-semibold text-foreground">{revokeTarget.item_name || 'Unknown Item'}</span>
+                        </p>
+                    </div>
+                ) : null}
+            />
         </div>
     );
 }
