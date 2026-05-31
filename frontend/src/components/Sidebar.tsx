@@ -167,7 +167,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               </span>
               {/enterprise/i.test(brandName) && (
                 <span className="text-[10px] font-medium font-heading text-sidebar-foreground/60 uppercase tracking-wider">
-                  Enterprise
+                  Enterprises
                 </span>
               )}
             </div>

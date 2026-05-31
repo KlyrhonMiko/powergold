@@ -1,5 +1,6 @@
 param(
-    [int]$StartupTimeout = 300
+    [int]$StartupTimeout = 300,
+    [switch]$Kiosk
 )
 
 $ErrorActionPreference = "Stop"
@@ -101,3 +102,10 @@ Write-Host "  Username: admin" -ForegroundColor Gray
 Write-Host "  Password: (generated during install; check env/.env.deploy for INITIAL_ADMIN_PASSWORD)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "NOTE: The certificate is self-signed. Accept the browser warning." -ForegroundColor Yellow
+
+if ($Kiosk) {
+    Write-Host ""
+    Write-Host "Opening PowerGold in Kiosk Mode..." -ForegroundColor Cyan
+    $kioskUrl = if ($lanIp) { "https://$lanIp" } else { "https://localhost" }
+    Start-Process "msedge.exe" -ArgumentList "--kiosk $kioskUrl --edge-kiosk-type=fullscreen"
+}

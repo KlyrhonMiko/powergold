@@ -18,8 +18,8 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Powergold Engineering Enterprise",
-  description: "Web application for Powergold Engineering Enterprise",
+  title: "Powergold Engineering Enterprises",
+  description: "Web application for Powergold Engineering Enterprises",
 };
 
 export default function RootLayout({

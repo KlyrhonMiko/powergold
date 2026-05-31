@@ -70,6 +70,7 @@ export default function InventorySettingsPage() {
               'inventory_category',
               'inventory_item_type',
               'inventory_classification',
+              'inventory_unit_of_measure',
               'inventory_status',
               'inventory_condition',
               'inventory_movements_reason_code',

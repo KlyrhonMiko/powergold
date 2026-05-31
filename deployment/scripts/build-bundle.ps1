@@ -87,7 +87,7 @@ if (Test-Path "$StagingDir\scripts\build-bundle.ps1") {
     Remove-Item "$StagingDir\scripts\build-bundle.ps1"
 }
 Copy-Item "$DeploymentDir\powergold.bat" "$StagingDir\powergold.bat"
-Copy-Item "$DeploymentDir\Powergold Enterprise Logo.png" "$StagingDir\Powergold Enterprise Logo.png"
+Copy-Item "$DeploymentDir\Powergold Enterprises Logo.png" "$StagingDir\Powergold Enterprises Logo.png"
 Copy-Item "$DeploymentDir\CHANGELOG.md" "$StagingDir\CHANGELOG.md"
 Copy-Item "$DeploymentDir\README_CLIENT.md" "$StagingDir\README_CLIENT.md"
 Copy-Item "$DeploymentDir\UPDATE_PROCESS.md" "$StagingDir\UPDATE_PROCESS.md"

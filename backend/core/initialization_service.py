@@ -27,6 +27,7 @@ NON_CRUCIAL_SEED_CATEGORIES = {
     "inventory_classification",
     "inventory_category",
     "inventory_movements_reason_code",
+    "inventory_unit_of_measure",
 }
 LEGACY_BORROWER_CONFIG_KEYS_BY_CATEGORY = {
     "borrow_requests_status": {

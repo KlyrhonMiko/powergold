@@ -3,10 +3,11 @@ setlocal
 
 set "ROOT=%~dp0"
 set "PS=powershell.exe -NoProfile -ExecutionPolicy Bypass"
-title PowerGold Enterprise
+title PowerGold Enterprises
 
 if /I "%~1"=="install" goto install
 if /I "%~1"=="start" goto start
+if /I "%~1"=="start-kiosk" goto startkiosk
 if /I "%~1"=="stop" goto stop
 if /I "%~1"=="stop-all" goto stopall
 if /I "%~1"=="restart" goto restart
@@ -18,45 +19,53 @@ if /I "%~1"=="restore" goto restore
 if /I "%~1"=="update" goto update
 if /I "%~1"=="cert" goto cert
 if /I "%~1"=="secrets" goto secrets
+if /I "%~1"=="enable-startup" goto enablestartup
+if /I "%~1"=="disable-startup" goto disablestartup
 if not "%~1"=="" goto usage
 
 :menu
 cls
 echo ========================================
-echo   PowerGold Enterprise
+echo   PowerGold Enterprises
 echo ========================================
 echo.
 echo   1. Install
-echo   2. Start
-echo   3. Stop App
-echo   4. Stop App + DB
-echo   5. Restart
-echo   6. Status
-echo   7. Logs
-echo   8. Verify
-echo   9. Backup DB
-echo  10. Restore DB
-echo  11. Update
-echo  12. Generate Certificate
-echo  13. Generate Secrets
-echo  14. Exit
+echo   2. Start Application
+echo   3. Start Application (Kiosk Mode)
+echo   4. Stop App
+echo   5. Stop App + DB
+echo   6. Restart
+echo   7. Status
+echo   8. Logs
+echo   9. Verify
+echo  10. Backup DB
+echo  11. Restore DB
+echo  12. Update
+echo  13. Generate Certificate
+echo  14. Generate Secrets
+echo  15. Enable Kiosk Auto-Run on Startup
+echo  16. Disable Kiosk Auto-Run
+echo  17. Exit
 echo.
 set /p choice=Choose an option: 
 
 if "%choice%"=="1" goto install
 if "%choice%"=="2" goto start
-if "%choice%"=="3" goto stop
-if "%choice%"=="4" goto stopall
-if "%choice%"=="5" goto restart
-if "%choice%"=="6" goto status
-if "%choice%"=="7" goto logs
-if "%choice%"=="8" goto verify
-if "%choice%"=="9" goto backup
-if "%choice%"=="10" goto restore
-if "%choice%"=="11" goto update
-if "%choice%"=="12" goto cert
-if "%choice%"=="13" goto secrets
-if "%choice%"=="14" goto end
+if "%choice%"=="3" goto startkiosk
+if "%choice%"=="4" goto stop
+if "%choice%"=="5" goto stopall
+if "%choice%"=="6" goto restart
+if "%choice%"=="7" goto status
+if "%choice%"=="8" goto logs
+if "%choice%"=="9" goto verify
+if "%choice%"=="10" goto backup
+if "%choice%"=="11" goto restore
+if "%choice%"=="12" goto update
+if "%choice%"=="13" goto cert
+if "%choice%"=="14" goto secrets
+if "%choice%"=="15" goto enablestartup
+if "%choice%"=="16" goto disablestartup
+if "%choice%"=="17" goto end
 goto menu
 
 :install
@@ -65,6 +74,10 @@ goto done
 
 :start
 %PS% -File "%ROOT%scripts\start.ps1"
+goto done
+
+:startkiosk
+%PS% -File "%ROOT%scripts\start.ps1" -Kiosk
 goto done
 
 :stop
@@ -120,9 +133,17 @@ goto done
 %PS% -File "%ROOT%scripts\generate-secrets.ps1"
 goto done
 
+:enablestartup
+%PS% -File "%ROOT%scripts\enable-startup.ps1"
+goto done
+
+:disablestartup
+%PS% -File "%ROOT%scripts\disable-startup.ps1"
+goto done
+
 :usage
 echo Usage:
-echo   powergold.bat [install^|start^|stop^|stop-all^|restart^|status^|logs^|verify^|backup^|restore^|update^|cert^|secrets]
+echo   powergold.bat [install^|start^|start-kiosk^|stop^|stop-all^|restart^|status^|logs^|verify^|backup^|restore^|update^|cert^|secrets^|enable-startup^|disable-startup]
 echo.
 echo Run without arguments to open the menu.
 goto end

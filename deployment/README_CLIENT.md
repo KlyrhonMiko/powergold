@@ -26,7 +26,7 @@
    ```powershell
    .\powergold.bat
    ```
-   The bundle also includes `Powergold Enterprise Logo.png` beside the launcher for branding/reference.
+   The bundle also includes `Powergold Enterprises Logo.png` beside the launcher for branding/reference.
 6. Choose **Install** from the menu.
    This generates fresh secrets on the client machine, creates local certificates, and loads Docker images.
 7. Run the launcher again and choose **Start**.
