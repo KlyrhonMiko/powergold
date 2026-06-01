@@ -98,4 +98,36 @@ describe('RequestsTable actions', () => {
     expect(screen.getByText('Cancelled after approval')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Void' })).not.toBeInTheDocument();
   });
+
+  it('disables row actions while a request is processing', () => {
+    render(
+      <RequestsTable
+        {...baseProps}
+        records={[
+          {
+            request_id: 'REQ-004',
+            borrower_name: 'Flow Tester',
+            items: [
+              {
+                item_id: 'ITEM-004',
+                name: 'Mixer',
+                qty_requested: 1,
+                is_trackable: true,
+              },
+            ],
+            status: 'approved',
+            request_date: '2026-05-29T12:00:00+08:00',
+          },
+        ]}
+        isFullyAssigned={vi.fn(() => true)}
+        processingRequestId="REQ-004"
+        processingLabel="Releasing units..."
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Reassign' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Void' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Release' })).toBeDisabled();
+    expect(screen.getByText('Releasing units...')).toBeInTheDocument();
+  });
 });

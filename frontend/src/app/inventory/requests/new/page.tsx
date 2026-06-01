@@ -11,6 +11,10 @@ import { borrowApi } from '@/app/inventory/requests/api';
 import type { ConfigRead } from '@/app/inventory/items/api';
 import { CartItem } from '@/app/borrow/lib/types';
 import { useDebounce } from '@/app/borrow/lib/useDebounce';
+import {
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS,
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE,
+} from '@/app/borrow/lib/requestLimits';
 import { parseQuantityInput } from '@/lib/inventoryQuantity';
 import { SelectionView } from '@/app/borrow/components/SelectionView';
 import { ConsumableRequestCheckout } from '../components/ConsumableRequestCheckout';
@@ -97,6 +101,8 @@ export default function InventoryConsumablesRequestPage() {
 
   const addToCart = useCallback((item: BorrowCatalogItem) => {
     const stepQty = 1;
+    let limitReached = false;
+
     setCart((previous) => {
       const existing = previous.find((entry) => entry.item_id === item.item_id);
       if (existing) {
@@ -113,8 +119,17 @@ export default function InventoryConsumablesRequestPage() {
         );
       }
 
+      if (previous.length >= MAX_BORROW_REQUEST_UNIQUE_ITEMS) {
+        limitReached = true;
+        return previous;
+      }
+
       return [...previous, { ...item, cartQty: Math.min(stepQty, Math.max(item.available_qty, stepQty)) }];
     });
+
+    if (limitReached) {
+      toast.error(MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE);
+    }
   }, []);
 
   const updateCartQty = useCallback((id: string, delta: number) => {
@@ -149,6 +164,11 @@ export default function InventoryConsumablesRequestPage() {
   const handleSubmit = useCallback(async () => {
     if (cart.length === 0) {
       toast.error('Add at least one item to the request');
+      return;
+    }
+
+    if (cart.length > MAX_BORROW_REQUEST_UNIQUE_ITEMS) {
+      toast.error(MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE);
       return;
     }
 

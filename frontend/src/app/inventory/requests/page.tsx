@@ -41,7 +41,7 @@ export default function BorrowsPage() {
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusTab>('ALL');
   const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(DEFAULT_PER_PAGE);
+  const [perPage] = useState(DEFAULT_PER_PAGE);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [confirmingAction, setConfirmingAction] = useState<{
     action: BorrowAction;
@@ -53,6 +53,10 @@ export default function BorrowsPage() {
   const [actionNotes, setActionNotes] = useState('');
   const [assignmentsMap, setAssignmentsMap] = useState<Record<string, { units: BorrowRequestUnit[]; batches: BorrowRequestBatch[] }>>({});
   const [receiptRequestId, setReceiptRequestId] = useState<string | null>(null);
+  const [processingRequest, setProcessingRequest] = useState<{
+    requestId: string;
+    action: 'assign' | 'release' | 'return';
+  } | null>(null);
 
   const debouncedSearch = useDebounce(searchInput, 400);
 
@@ -71,6 +75,18 @@ export default function BorrowsPage() {
   const error = requestsError ? (requestsError as Error).message : null;
 
   const { executeAction, invalidateList } = useBorrowMutations();
+
+  const processingLabel = useMemo(() => {
+    if (!processingRequest) return null;
+
+    const copy: Record<typeof processingRequest.action, string> = {
+      assign: 'Assigning units...',
+      release: 'Releasing units...',
+      return: 'Returning units...',
+    };
+
+    return copy[processingRequest.action];
+  }, [processingRequest]);
 
   const fetchRequestEvents = useCallback(async (requestId: string, force = false) => {
     if (!force && requestEvents[requestId]) return;
@@ -132,6 +148,13 @@ export default function BorrowsPage() {
   // Remove manual initial fetchRecords hook
 
   const handleAction = async (action: BorrowAction, requestId: string, notes?: string) => {
+    if (processingRequest) return;
+
+    const isTrackedProcessingAction = action === 'release';
+    if (isTrackedProcessingAction) {
+      setProcessingRequest({ requestId, action });
+    }
+
     try {
       await executeAction.mutateAsync({ action, id: requestId, payload: { notes } });
       toast.success(`Request ${ACTION_SUCCESS_LABELS[action]} successfully`);
@@ -148,6 +171,12 @@ export default function BorrowsPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : `Failed to ${action} request`;
       toast.error(msg);
+    } finally {
+      if (isTrackedProcessingAction) {
+        setProcessingRequest((current) => (
+          current?.requestId === requestId && current.action === action ? null : current
+        ));
+      }
     }
   };
 
@@ -200,6 +229,8 @@ export default function BorrowsPage() {
           onSetReturningRequest={(record) => setReturningRequest(record)}
           isFullyAssigned={isFullyAssigned}
           onShowReceipt={(requestId) => setReceiptRequestId(requestId)}
+          processingRequestId={processingRequest?.requestId ?? null}
+          processingLabel={processingLabel}
         />
 
         {meta && (
@@ -210,6 +241,8 @@ export default function BorrowsPage() {
       <ConfirmBorrowActionModal
         confirmingAction={confirmingAction}
         actionNotes={actionNotes}
+        isProcessing={processingRequest?.action === 'release' && processingRequest.requestId === confirmingAction?.requestId}
+        processingLabel={processingLabel ?? undefined}
         onActionNotesChange={setActionNotes}
         onCancel={() => setConfirmingAction(null)}
         onConfirm={() => {
@@ -222,6 +255,9 @@ export default function BorrowsPage() {
         <UnitSelectionModal
           request={assigningRequest as unknown as BorrowRequest}
           onClose={() => setAssigningRequest(null)}
+          onProcessingChange={(isProcessing) => {
+            setProcessingRequest(isProcessing ? { requestId: assigningRequest.request_id, action: 'assign' } : null);
+          }}
           onSuccess={() => {
             const requestId = assigningRequest.request_id;
             setAssigningRequest(null);
@@ -236,6 +272,9 @@ export default function BorrowsPage() {
         <ReturnModal
           request={returningRequest as unknown as BorrowRequest}
           onClose={() => setReturningRequest(null)}
+          onProcessingChange={(isProcessing) => {
+            setProcessingRequest(isProcessing ? { requestId: returningRequest.request_id, action: 'return' } : null);
+          }}
           onSuccess={() => {
             const requestId = returningRequest.request_id;
             setReturningRequest(null);

@@ -1,4 +1,8 @@
 import type { CartItem } from './types';
+import {
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS,
+  MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE,
+} from './requestLimits';
 
 interface BorrowSubmissionInput {
   cart: CartItem[];
@@ -27,6 +31,10 @@ export function validateBorrowSubmission(input: BorrowSubmissionInput): string |
 
   if (input.cart.length === 0) {
     return 'Add at least one item to the request';
+  }
+
+  if (input.cart.length > MAX_BORROW_REQUEST_UNIQUE_ITEMS) {
+    return MAX_BORROW_REQUEST_UNIQUE_ITEMS_MESSAGE;
   }
 
   for (const cartItem of input.cart) {

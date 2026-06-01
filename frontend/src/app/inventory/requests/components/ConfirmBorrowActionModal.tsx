@@ -9,6 +9,7 @@ import {
   Archive,
   RotateCcw,
   Ban,
+  Loader2,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
@@ -53,12 +54,16 @@ const ACTION_CONFIG: Record<string, { icon: ReactNode; color: string; btnClass: 
 export function ConfirmBorrowActionModal({
   confirmingAction,
   actionNotes,
+  isProcessing = false,
+  processingLabel,
   onActionNotesChange,
   onCancel,
   onConfirm,
 }: {
   confirmingAction: { action: BorrowAction; requestId: string; actionLabel: string } | null;
   actionNotes: string;
+  isProcessing?: boolean;
+  processingLabel?: string;
   onActionNotesChange: (v: string) => void;
   onCancel: () => void;
   onConfirm: () => void;
@@ -71,7 +76,7 @@ export function ConfirmBorrowActionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-        onClick={onCancel}
+        onClick={isProcessing ? undefined : onCancel}
       />
       <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-xl relative z-10 animate-in zoom-in-95 fade-in duration-200">
         <div className="p-6">
@@ -97,26 +102,36 @@ export function ConfirmBorrowActionModal({
             <textarea
               autoFocus
               value={actionNotes}
+              disabled={isProcessing}
               onChange={(e) => onActionNotesChange(e.target.value)}
               placeholder={`Add a note for this ${confirmingAction.actionLabel.toLowerCase()}...`}
-              className="w-full h-24 p-3 rounded-lg bg-muted/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 transition-all text-sm resize-none"
+              className="w-full h-24 p-3 rounded-lg bg-muted/30 border border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary/40 disabled:opacity-60 transition-all text-sm resize-none"
             />
           </div>
 
           <div className="flex gap-2.5 mt-5">
             <button
+              disabled={isProcessing}
               onClick={onCancel}
-              className="flex-1 h-10 rounded-lg border border-border font-medium text-sm hover:bg-muted/50 transition-all text-muted-foreground"
+              className="flex-1 h-10 rounded-lg border border-border font-medium text-sm hover:bg-muted/50 disabled:opacity-50 disabled:grayscale transition-all text-muted-foreground"
               type="button"
             >
               Cancel
             </button>
             <button
+              disabled={isProcessing}
               onClick={onConfirm}
-              className={`flex-1 h-10 rounded-lg text-sm font-medium transition-all ${config.btnClass}`}
+              className={`flex-1 h-10 rounded-lg text-sm font-medium transition-all disabled:opacity-50 disabled:grayscale ${config.btnClass}`}
               type="button"
             >
-              {confirmingAction.actionLabel}
+              {isProcessing ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {processingLabel || `${confirmingAction.actionLabel}...`}
+                </span>
+              ) : (
+                confirmingAction.actionLabel
+              )}
             </button>
           </div>
         </div>
